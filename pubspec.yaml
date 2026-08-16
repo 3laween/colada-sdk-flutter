@@ -1,0 +1,44 @@
+name: colada_sdk
+description: >-
+  Flutter SDK for Colada mobile attribution and event tracking. A single-package
+  bridge over the native Colada Android and iOS SDKs.
+version: 0.1.1
+repository: https://github.com/3laween/colada-sdk-flutter
+homepage: https://github.com/3laween/colada-sdk-flutter
+issue_tracker: https://github.com/3laween/colada-sdk-flutter/issues
+
+# Floors are set at what the code actually needs (sealed classes, records),
+# not at the local toolchain version, so integrators on slightly older stable
+# channels are not locked out.
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.11.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  # Declared now for later phases: plugin_platform_interface (in case a third
+  # platform ever forces federation, D4) and pigeon (the Dart<->native schema
+  # generator, first used in Phase 4).
+  plugin_platform_interface: ^2.1.8
+  pigeon: ^27.3.0
+
+# This is a method-channel plugin, not a Dart-only or federated one, so it
+# declares android + ios directly with no default_package and no
+# dartPluginClass. The Android package namespace is io.coladaapp.sdk.flutter,
+# deliberately distinct from the native SDK's own io.coladaapp.sdk namespace to
+# avoid a collision in the merged manifest.
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.coladaapp.sdk.flutter
+        pluginClass: ColadaSdkPlugin
+      ios:
+        pluginClass: ColadaSdkPlugin

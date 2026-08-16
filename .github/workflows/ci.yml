@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  FLUTTER_VERSION: 3.44.2
+
+jobs:
+  analyze-and-test:
+    name: Analyze, format & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter --version
+      - run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+
+  build-android:
+    name: Build example (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Build example APK
+        # No-op until the example app lands in Phase 14. Wired now so the build
+        # gate cannot be forgotten.
+        run: |
+          if [ -d example ]; then
+            cd example && flutter pub get && flutter build apk --debug
+          else
+            echo "example/ not present yet — skipping (wired for Phase 14)."
+          fi
+
+  build-ios:
+    name: Build example (iOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Build example iOS (no codesign)
+        # No-op until the example app lands in Phase 14. Wired now so the build
+        # gate cannot be forgotten.
+        run: |
+          if [ -d example ]; then
+            cd example && flutter pub get && flutter build ios --no-codesign --debug
+          else
+            echo "example/ not present yet — skipping (wired for Phase 14)."
+          fi
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the scan covers every commit, not just the tip.
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # Note: gitleaks-action requires GITLEAKS_LICENSE only for GitHub
+          # *organization* accounts. This repo is under a user account, so no
+          # license is needed. If it ever moves to an org, add the secret.
+
+  no-private-refs:
+    name: No private references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for internal-only references
+        run: bash tools/check-no-private-refs.sh

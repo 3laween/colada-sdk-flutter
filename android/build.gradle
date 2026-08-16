@@ -1,0 +1,57 @@
+group = 'io.coladaapp.sdk.flutter'
+version = '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.3.20'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:9.0.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        // Only public repositories. The native Colada Android SDK (added in
+        // Phase 5) is published to Maven Central; there is deliberately no
+        // GitHub Packages maven { url ... } block and no credentials {} block.
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = 'io.coladaapp.sdk.flutter'
+    compileSdk = 36
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        // Matches the native Colada Android SDK floor (minSdk 23). The host app
+        // must build with compileSdk >= 36 and JDK 17.
+        minSdk = 23
+    }
+}
+
+dependencies {
+    // The native Colada Android SDK (io.coladaapp:colada-android) is added in
+    // Phase 5. colada-core arrives transitively via `api` and must not be
+    // declared separately.
+}

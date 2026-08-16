@@ -1,0 +1,21 @@
+# gitleaks configuration for colada_sdk.
+#
+# Extends the built-in gitleaks ruleset (AWS keys, generic tokens, private keys,
+# etc.) with a custom rule for the Colada tenant-key shape. CI scans both the
+# working tree and the full git history.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "colada-tenant-key"
+description = "Colada live tenant key (pk_live_ + 64 hex)"
+regex = '''pk_live_[0-9a-fA-F]{64}'''
+tags = ["colada", "tenant-key"]
+
+[allowlist]
+description = "Paths that are allowed to contain key-shaped strings"
+# The pk_live_ *format* (prefix + placeholder) is public and appears in docs and
+# READMEs. Only a full 64-hex live key is a secret; the rule above requires that
+# exact shape, so documentation placeholders such as pk_live_xxxx... do not match.
+paths = []
