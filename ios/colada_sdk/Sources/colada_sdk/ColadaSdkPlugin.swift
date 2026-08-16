@@ -15,7 +15,9 @@ import UIKit
 ///  - **10** identity and events: `setUser` / `clearUser` / `track` / `flush`,
 ///    including the translation onto the native SDK's fixed event vocabulary
 ///    and fixed metadata shape.
-///  - **11** attribution, **12** deep links.
+///  - **11** attribution: the resolved-attribution stream, `currentAttribution`
+///    and `consumeDeferredDeepLink`, flattened into the shape Android reports.
+///  - **12** deep links.
 ///
 /// ### Threading
 ///
@@ -48,6 +50,17 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   private lazy var logStreamHandler = BridgeLogStreamHandler(plugin: self)
 
+  /// Set when Dart subscribes to the attribution stream.
+  fileprivate var attributionEventSink: PigeonEventSink<NativeAttribution>?
+
+  /// Consumes the native `observeAttribution()` stream while Dart is
+  /// subscribed. Cancelled on unsubscribe and on engine detach — the stream
+  /// never finishes on its own, so a task left running would outlive the engine
+  /// it was feeding.
+  private var attributionTask: Task<Void, Never>?
+
+  private lazy var attributionStreamHandler = BridgeAttributionStreamHandler(plugin: self)
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = ColadaSdkPlugin()
     // ColadaHostApiSetup, not ColadaHostApi: in Swift, Pigeon generates the API
@@ -61,11 +74,19 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       with: registrar.messenger(),
       streamHandler: instance.logStreamHandler
     )
+    AttributionResolvedStreamHandler.register(
+      with: registrar.messenger(),
+      streamHandler: instance.attributionStreamHandler
+    )
     // Retained so the instance outlives `register`; also the hook the deep-link
     // callbacks in Phase 12 need.
     registrar.publish(instance)
-    // The attribution event channel is registered in Phase 11, together with
-    // the native observation task that feeds it.
+  }
+
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    ColadaHostApiSetup.setUp(binaryMessenger: registrar.messenger(), api: nil)
+    stopObservingAttribution()
+    logEventSink = nil
   }
 
   // MARK: - ColadaHostApi: lifecycle (Phase 9)
@@ -218,22 +239,147 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
     }
   }
 
-  // MARK: - ColadaHostApi
-  //
-  // Phase 11 replaces attribution, Phase 12 deep links.
+  // MARK: - ColadaHostApi: attribution (Phase 11)
 
   func currentAttribution(completion: @escaping (Result<NativeAttribution?, Error>) -> Void) {
-    completion(.failure(Self.notImplemented("currentAttribution")))
+    // Like deviceId, this suspends behind an unfinished configure(); answering
+    // Dart's documented "null until it resolves" is better than hanging.
+    guard initialized else {
+      completion(.success(nil))
+      return
+    }
+    Task {
+      let result = await ColadaSDK.shared.lastAttribution
+      let native = result.map(Self.attribution(from:))
+      self.onMain { completion(.success(native)) }
+    }
   }
 
   func consumeDeferredDeepLink(
     completion: @escaping (Result<NativeDeferredDeepLink?, Error>) -> Void
   ) {
-    completion(.failure(Self.notImplemented("consumeDeferredDeepLink")))
+    guard initialized else {
+      completion(.success(nil))
+      return
+    }
+    Task {
+      // One-shot, and re-armed by the next successful handshake — where Android
+      // re-arms only when the app asks it to. Documented, not papered over.
+      let link = await ColadaSDK.shared.consumeDeferredDeepLink()
+      let native = link.map(Self.deferredDeepLink(from:))
+      self.onMain { completion(.success(native)) }
+    }
   }
+
+  // MARK: - ColadaHostApi
+  //
+  // Phase 12 replaces deep-link intake.
 
   func handleDeepLink(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
     completion(.failure(Self.notImplemented("handleDeepLink")))
+  }
+
+  // MARK: - Attribution observation (Phase 11)
+
+  /// Starts feeding the attribution event channel.
+  ///
+  /// Deliberately started when Dart subscribes rather than at `initialize`:
+  /// `observeAttribution()` replays the current `lastAttribution` to each new
+  /// consumer, so opening the stream here is what makes a late subscriber still
+  /// receive a result that resolved seconds earlier. Attribution usually
+  /// resolves before any UI is ready to listen, so this is the normal case, not
+  /// the edge case. The Android bridge attaches its native listener at the same
+  /// moment, for the same reason.
+  fileprivate func startObservingAttribution(sink: PigeonEventSink<NativeAttribution>) {
+    attributionEventSink = sink
+    attributionTask?.cancel()
+    attributionTask = Task { [weak self] in
+      let stream = await ColadaSDK.shared.observeAttribution()
+      for await result in stream {
+        guard let self, !Task.isCancelled else { return }
+        let native = Self.attribution(from: result)
+        // Values arrive on the SDK's own executor; Flutter requires event-sink
+        // writes to come from the platform thread.
+        self.onMain { self.attributionEventSink?.success(native) }
+      }
+    }
+  }
+
+  fileprivate func stopObservingAttribution() {
+    attributionTask?.cancel()
+    attributionTask = nil
+    attributionEventSink = nil
+  }
+
+  // MARK: - Attribution mapping (Phase 11)
+
+  /// Flattens the native handshake result into the shape Dart sees on both
+  /// platforms.
+  ///
+  /// Two deliberate differences from a straight field copy:
+  ///
+  /// - The native result is flat, with the deferred-deep-link fields sitting
+  ///   alongside the campaign ones. Android nests them, so they are nested here
+  ///   too and the Dart model has one shape everywhere.
+  /// - `asn`, `osVersion`, `screenResolution` and `rawLink` have no Android
+  ///   counterpart, so rather than dropping them they are folded into `extras`,
+  ///   where the Dart model already carries anything neither SDK models.
+  private static func attribution(from result: AttributionHandshakeResult) -> NativeAttribution {
+    var extras: [String: Any?] = [:]
+    if let asn = result.asn { extras["asn"] = asn }
+    if let osVersion = result.osVersion { extras["osVersion"] = osVersion }
+    if let screenResolution = result.screenResolution {
+      extras["screenResolution"] = screenResolution
+    }
+    if let rawLink = result.rawLink { extras["rawLink"] = rawLink }
+
+    return NativeAttribution(
+      matched: result.matched,
+      // The backend's own wire string, parsed in Dart with an `unknown`
+      // fallback so a strategy added later never breaks a plugin in the field.
+      matchMethod: result.matchMethod,
+      utmSource: result.utmSource,
+      utmCampaign: result.utmCampaign,
+      utmMedium: result.utmMedium,
+      utmContent: result.utmContent,
+      utmTerm: result.utmTerm,
+      clickId: result.clickId,
+      attributionId: result.attributionId,
+      tenantKey: result.tenantKey,
+      deferredDeepLink: deferredDeepLink(from: result),
+      extras: extras
+    )
+  }
+
+  /// Synthesises the nested deferred deep link, or nil when the handshake
+  /// carried no destination — matching Android, which reports nil rather than
+  /// an empty target.
+  private static func deferredDeepLink(from result: AttributionHandshakeResult)
+    -> NativeDeferredDeepLink?
+  {
+    let isSubscription = result.isCoffeeSubscription ?? false
+    guard result.attributionStoreId != nil || result.attributionMenuItemId != nil
+      || isSubscription
+    else {
+      return nil
+    }
+    return NativeDeferredDeepLink(
+      storeId: result.attributionStoreId,
+      menuItemId: result.attributionMenuItemId,
+      isCoffeeSubscription: isSubscription,
+      // Always empty on iOS: the native SDK surfaces no additional parameters
+      // for a deferred deep link, where Android carries the handshake's extras.
+      extras: [:]
+    )
+  }
+
+  private static func deferredDeepLink(from link: DeferredDeepLink) -> NativeDeferredDeepLink {
+    NativeDeferredDeepLink(
+      storeId: link.storeId,
+      menuItemId: link.menuItemId,
+      isCoffeeSubscription: link.isCoffeeSubscription ?? false,
+      extras: [:]
+    )
   }
 
   // MARK: - Event metadata (Phase 10)
@@ -439,6 +585,27 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 /// engine while the plugin is retained by the registrar; a strong reference
 /// here would keep the plugin alive after a detached engine should have
 /// released it.
+/// Starts and stops the native attribution observation with Dart's
+/// subscription.
+///
+/// Weak for the same reason as the log handler: the event channel outlives a
+/// detached plugin, and a strong reference here would keep it alive with it.
+private final class BridgeAttributionStreamHandler: AttributionResolvedStreamHandler {
+  private weak var plugin: ColadaSdkPlugin?
+
+  init(plugin: ColadaSdkPlugin) {
+    self.plugin = plugin
+  }
+
+  override func onListen(withArguments arguments: Any?, sink: PigeonEventSink<NativeAttribution>) {
+    plugin?.startObservingAttribution(sink: sink)
+  }
+
+  override func onCancel(withArguments arguments: Any?) {
+    plugin?.stopObservingAttribution()
+  }
+}
+
 private final class BridgeLogStreamHandler: LogEmittedStreamHandler {
   private weak var plugin: ColadaSdkPlugin?
 
