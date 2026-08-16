@@ -17,7 +17,8 @@ import UIKit
 ///    and fixed metadata shape.
 ///  - **11** attribution: the resolved-attribution stream, `currentAttribution`
 ///    and `consumeDeferredDeepLink`, flattened into the shape Android reports.
-///  - **12** deep links.
+///  - **12** automatic deep-link forwarding: cold start, custom schemes and
+///    Universal Links, plus the pre-initialize buffer.
 ///
 /// ### Threading
 ///
@@ -61,6 +62,11 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   private lazy var attributionStreamHandler = BridgeAttributionStreamHandler(plugin: self)
 
+  /// Links the OS delivered before initialize. Replayed once the SDK is up.
+  private var pendingLinks: [URL] = []
+
+  private static let maxPendingLinks = 5
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = ColadaSdkPlugin()
     // ColadaHostApiSetup, not ColadaHostApi: in Swift, Pigeon generates the API
@@ -78,9 +84,12 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       with: registrar.messenger(),
       streamHandler: instance.attributionStreamHandler
     )
-    // Retained so the instance outlives `register`; also the hook the deep-link
-    // callbacks in Phase 12 need.
+    // Retained so the instance outlives `register`.
     registrar.publish(instance)
+    // Subscribes the plugin to the app delegate's URL callbacks. Without this
+    // the three methods below are simply never called, and nothing about the
+    // build would tell you so — the integrator would just never be attributed.
+    registrar.addApplicationDelegate(instance)
   }
 
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
@@ -123,6 +132,8 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
         self.onMain {
           self.initialized = true
           self.emitLog(ColadaLogLevel.debug, "Native Colada iOS SDK configured.")
+          // Phase 12: replay links the OS delivered before the SDK was up.
+          self.drainPendingLinks()
           completion(.success(()))
         }
       } catch {
@@ -271,12 +282,133 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
     }
   }
 
-  // MARK: - ColadaHostApi
-  //
-  // Phase 12 replaces deep-link intake.
+  // MARK: - ColadaHostApi: deep links (Phase 12)
 
   func handleDeepLink(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.failure(Self.notImplemented("handleDeepLink")))
+    // The manual escape hatch, reached only when the host opted out of
+    // automatic forwarding. Forwarded unconditionally: the host asked for this
+    // one explicitly, and the native SDK de-duplicates a link it has already
+    // seen, so an overlap with the automatic path is harmless.
+    if let parsed = URL(string: url) {
+      report(parsed)
+    } else {
+      emitLog(ColadaLogLevel.warn, "Ignored a deep link that is not a valid URL: \(url)")
+    }
+    // Fire-and-forget, matching Android and the Dart API's own contract: the
+    // handshake result is already broadcast on the attribution stream, so
+    // waiting for it here would only delay the caller.
+    completion(.success(()))
+  }
+
+  // MARK: - Automatic deep-link forwarding (Phase 12)
+  //
+  // The integrator writes no platform code: the plugin observes what the OS
+  // delivers and reports it. Every handler below returns false — this plugin is
+  // an observer of the link, never its owner, so app_links and friends still
+  // see it.
+
+  public func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any] = [:]
+  ) -> Bool {
+    // Cold start. The URL is delivered here before the Flutter engine — and so
+    // before Dart can have called initialize — which is the whole reason the
+    // buffer below exists.
+    if let url = launchOptions[.url] as? URL {
+      forward(url)
+    }
+    // Cold start via a Universal Link arrives as an activity dictionary instead.
+    if let activities = launchOptions[.userActivityDictionary] as? [AnyHashable: Any] {
+      for case let activity as NSUserActivity in activities.values {
+        forward(universalLink: activity)
+      }
+    }
+    // Never false: this is the launch path, and a plugin has no business
+    // reporting that the app failed to launch.
+    return true
+  }
+
+  public func application(
+    _ application: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    forward(url)
+    return false
+  }
+
+  public func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]) -> Void
+  ) -> Bool {
+    // Universal Links, which is how most real campaign links arrive.
+    forward(universalLink: userActivity)
+    return false
+  }
+
+  private func forward(universalLink activity: NSUserActivity) {
+    guard activity.activityType == NSUserActivityTypeBrowsingWeb,
+      let url = activity.webpageURL
+    else {
+      return
+    }
+    forward(url)
+  }
+
+  /// Reports a link, or buffers it until the SDK is configured.
+  ///
+  /// The buffer is not there to cover the configure race — the native SDK waits
+  /// for an unfinished `configure()` by itself. It is there because
+  /// `automaticDeepLinkForwarding` is not *known* until initialize crosses from
+  /// Dart, and forwarding a link the host meant to own itself cannot be undone.
+  /// Bounded, so a pathological sender cannot grow it without limit.
+  private func forward(_ url: URL) {
+    guard initialized else {
+      if pendingLinks.count >= Self.maxPendingLinks {
+        pendingLinks.removeFirst()
+      }
+      pendingLinks.append(url)
+      emitLog(ColadaLogLevel.debug, "Buffered a deep link until initialize: \(url)")
+      return
+    }
+    guard autoForward else {
+      emitLog(
+        ColadaLogLevel.debug,
+        "Ignored a deep link because automaticDeepLinkForwarding is off: \(url)")
+      return
+    }
+    report(url)
+  }
+
+  /// Replays links buffered before initialize. Called once initialize succeeds.
+  private func drainPendingLinks() {
+    let links = pendingLinks
+    pendingLinks.removeAll()
+    if links.isEmpty { return }
+    // In manual mode those links belong to the host, so drop them rather than
+    // reporting links it never asked us to report.
+    guard autoForward else {
+      emitLog(
+        ColadaLogLevel.debug,
+        "Dropped \(links.count) buffered deep link(s): automaticDeepLinkForwarding is off.")
+      return
+    }
+    emitLog(
+      ColadaLogLevel.debug,
+      "Replaying \(links.count) deep link(s) buffered before initialize.")
+    for url in links { report(url) }
+  }
+
+  /// Hands a link to the native SDK. The result is discarded on purpose: it is
+  /// already broadcast on the attribution stream, and the Dart API is
+  /// fire-and-forget on both platforms.
+  private func report(_ url: URL) {
+    // The only diagnostic there is on this platform: the native iOS SDK has no
+    // log sink, so without this an integrator debugging attribution cannot tell
+    // "the link never reached the SDK" from "the SDK saw it and dropped it".
+    emitLog(ColadaLogLevel.debug, "Reported a deep link: \(url)")
+    Task { _ = await ColadaSDK.shared.handleDeepLink(url) }
   }
 
   // MARK: - Attribution observation (Phase 11)
