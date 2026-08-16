@@ -5,8 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Pinned so a Flutter release can never silently change a build result: a red
+# CI run is always caused by the commit under review. The cost of pinning is a
+# blind spot — CI would stay green straight through a Flutter release that
+# breaks this plugin — which the `latest-flutter` canary job below covers.
 env:
-  FLUTTER_VERSION: 3.44.2
+  FLUTTER_VERSION: 3.44.8
 
 jobs:
   analyze-and-test:
@@ -26,6 +30,37 @@ jobs:
         run: flutter analyze
       - name: Test
         run: flutter test
+
+  pigeon:
+    name: Pigeon codegen is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+      # Regenerate from the schema and fail if anything moved. A stale
+      # generated file is the one way the three languages can silently disagree
+      # about the contract, so it cannot be allowed to merge.
+      - name: Regenerate
+        # The format step matches the documented local command. Pigeon does not
+        # emit dart-format-clean Dart, so without it this job and the format
+        # job disagree about what the committed file should look like.
+        run: |
+          dart run pigeon --input pigeons/colada_api.dart
+          dart format lib/src/messages.g.dart
+      - name: Fail if the committed output is stale
+        run: |
+          if ! git diff --exit-code -- \
+            lib/src/messages.g.dart \
+            android/src/main/kotlin/io/coladaapp/sdk/flutter/Messages.g.kt \
+            ios/colada_sdk/Sources/colada_sdk/Messages.g.swift; then
+            echo "::error::Generated Pigeon files are out of date. Run:"
+            echo "::error::  dart run pigeon --input pigeons/colada_api.dart"
+            exit 1
+          fi
 
   build-android:
     name: Build example (Android)
@@ -67,6 +102,51 @@ jobs:
             cd example && flutter pub get && flutter build ios --no-codesign --debug
           else
             echo "example/ not present yet — skipping (wired for Phase 14)."
+          fi
+
+  latest-flutter:
+    name: Canary — newest stable Flutter (informational)
+    runs-on: macos-latest
+    # NEVER blocks a PR. Its only job is to notice, before a customer does,
+    # that a new Flutter release has started rejecting something we ship.
+    # Everything else in this workflow stays pinned and authoritative.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # No flutter-version: whatever stable is newest on the day this runs.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter --version
+      - run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+
+      # The deprecations this job exists to catch — a plugin applying the
+      # Kotlin Gradle Plugin, and a plugin with no Swift Package Manager
+      # support — are reported by the Flutter tool only while BUILDING AN APP
+      # that uses the plugin. Analyzing the package alone never surfaces them.
+      # So until example/ lands in Phase 14, this job's coverage is Dart-level
+      # only, and these two steps announce that rather than passing silently.
+      - name: Build example (Android) on newest stable
+        run: |
+          if [ -d example ]; then
+            cd example && flutter pub get && flutter build apk --debug
+          else
+            echo "::warning::example/ does not exist yet (Phase 14). The KGP and"
+            echo "::warning::Swift Package Manager deprecations CANNOT be detected"
+            echo "::warning::until it does — this canary is Dart-only for now."
+          fi
+      - name: Build example (iOS) on newest stable
+        run: |
+          if [ -d example ]; then
+            cd example && flutter build ios --no-codesign --debug
           fi
 
   secret-scan:

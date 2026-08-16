@@ -1,0 +1,4 @@
+GENERATED CODE — DO NOT EDIT BY HAND.
+Regenerate with:
+  dart run pigeon --input pigeons/colada_api.dart && dart format lib/src/messages.g.dart
+Schema: pigeons/colada_api.dart

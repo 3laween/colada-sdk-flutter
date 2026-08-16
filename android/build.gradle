@@ -2,14 +2,20 @@ group = 'io.coladaapp.sdk.flutter'
 version = '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '2.3.20'
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:9.0.1'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        // NO kotlin-gradle-plugin classpath, and no `apply plugin:
+        // 'kotlin-android'` below. Flutter now applies the Kotlin Gradle Plugin
+        // itself and picks the version for the app and every plugin together
+        // ("Built-in Kotlin"). A plugin that brings its own makes the host app
+        // reconcile several Kotlin versions in one build — and future Flutter
+        // releases reject such plugins outright, which would break every app
+        // that depends on this package, in a file they cannot patch.
+        // See: docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin
     }
 }
 
@@ -24,7 +30,6 @@ rootProject.allprojects {
 }
 
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
 
 android {
     namespace = 'io.coladaapp.sdk.flutter'
@@ -35,10 +40,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
@@ -47,6 +48,15 @@ android {
         // Matches the native Colada Android SDK floor (minSdk 23). The host app
         // must build with compileSdk >= 36 and JDK 17.
         minSdk = 23
+    }
+}
+
+// Replaces the old `android { kotlinOptions { jvmTarget = '17' } }`. That block
+// belongs to the Kotlin plugin we no longer apply; configuring the compiler
+// through the `kotlin` extension is how it is done under Built-in Kotlin.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

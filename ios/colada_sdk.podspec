@@ -13,7 +13,9 @@ A Flutter bridge over the native Colada iOS SDK for mobile attribution and event
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Colada' => 'engineering@coladaapp.io' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  # Same sources the Swift Package Manager manifest compiles — see
+  # colada_sdk/Package.swift. Both packaging formats must stay in step.
+  s.source_files     = 'colada_sdk/Sources/colada_sdk/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
   s.swift_version = '5.9'
