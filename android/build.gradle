@@ -61,7 +61,12 @@ kotlin {
 }
 
 dependencies {
-    // The native Colada Android SDK (io.coladaapp:colada-android) is added in
-    // Phase 5. colada-core arrives transitively via `api` and must not be
-    // declared separately.
+    // The native Colada Android SDK. Published to Maven Central; pinned exactly
+    // to 0.1.1 (the version this bridge was built and verified against). Loosen
+    // to a range only once a second version exists and compatibility is proven.
+    //
+    // colada-core is pulled in transitively via colada-android's `api`
+    // dependency (see its POM), so it must NOT be declared here — declaring it
+    // separately risks a version skew between core and android.
+    implementation 'io.coladaapp:colada-android:0.1.1'
 }
