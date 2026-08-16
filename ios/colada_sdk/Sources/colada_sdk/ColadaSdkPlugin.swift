@@ -12,7 +12,10 @@ import UIKit
 ///  - **9** lifecycle: ``initialize(config:completion:)`` /
 ///    ``isInitialized(completion:)`` / ``deviceId(completion:)``, the native
 ///    error mapper, and the log event channel the later phases report through.
-///  - **10** identity and events, **11** attribution, **12** deep links.
+///  - **10** identity and events: `setUser` / `clearUser` / `track` / `flush`,
+///    including the translation onto the native SDK's fixed event vocabulary
+///    and fixed metadata shape.
+///  - **11** attribution, **12** deep links.
 ///
 /// ### Threading
 ///
@@ -126,17 +129,23 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
     }
   }
 
-  // MARK: - ColadaHostApi
-  //
-  // Phase 10 replaces the identity and event calls, Phase 11 attribution,
-  // Phase 12 deep links.
+  // MARK: - ColadaHostApi: identity and events (Phase 10)
 
   func setUser(externalUserId: String, completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.failure(Self.notImplemented("setUser")))
+    Task {
+      await ColadaSDK.shared.setExternalUserId(externalUserId)
+      self.onMain { completion(.success(())) }
+    }
   }
 
   func clearUser(completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.failure(Self.notImplemented("clearUser")))
+    Task {
+      // The native SDK models "no user" as a nil external id. Note the
+      // divergence this leaves: Android flushes the outgoing user's queued
+      // events before clearing, iOS does not.
+      await ColadaSDK.shared.setExternalUserId(nil)
+      self.onMain { completion(.success(())) }
+    }
   }
 
   func track(
@@ -144,12 +153,74 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
     metadata: [String: Any?],
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
-    completion(.failure(Self.notImplemented("track")))
+    // 1. Name to enum. The native vocabulary is fixed at nine cases, and its raw
+    //    values are the same wire strings Dart sends, so an unrecognised name is
+    //    exactly a Dart `RawEvent` — which this platform cannot express. Never
+    //    drop it silently: an event the app believes it sent and the backend
+    //    never sees is the worst possible failure here.
+    guard let name = AttributionEventName(rawValue: eventName) else {
+      completion(
+        .failure(
+          unsupported(
+            feature: "custom event names",
+            message:
+              "The native iOS SDK accepts only its nine fixed event names, so '\(eventName)' "
+              + "cannot be sent. Use one of the typed ColadaEvent subclasses instead.")))
+      return
+    }
+
+    // 2. Metadata to the native SDK's fixed shape. Anything it has no field for
+    //    cannot be transmitted by this binary at all, so report what was lost
+    //    rather than letting the app believe it arrived.
+    let userInfo = Self.userInfo(from: metadata)
+    let sendAsRegistration = name == .completeRegistration && userInfo != nil
+    let transmittable =
+      sendAsRegistration ? Self.registrationKeys : Self.metadataKeys
+    let dropped = metadata.keys.filter { !transmittable.contains($0) }.sorted()
+
+    if !dropped.isEmpty,
+      let error = reportUnsupported(
+        feature: "custom event metadata",
+        detail:
+          "The native iOS SDK transmits only \(transmittable.sorted().joined(separator: ", ")) "
+          + "on \(eventName). Dropped: \(dropped.joined(separator: ", ")). The event itself "
+          + "was still sent.")
+    {
+      completion(.failure(error))
+      return
+    }
+
+    Task {
+      do {
+        if sendAsRegistration {
+          // 3. Registration routing. reportRegistration is the only call that
+          //    can carry user data, and the only way name/email/phoneNumber
+          //    leave the device.
+          _ = try await ColadaSDK.shared.reportRegistration(userInfo: userInfo)
+        } else {
+          _ = try await ColadaSDK.shared.reportEvent(
+            name, metadata: Self.eventMetadata(from: metadata))
+        }
+        self.onMain { completion(.success(())) }
+      } catch {
+        // Includes .missingExternalUserId — tracking before setUser is a
+        // hard failure on iOS where Android holds the event. Mapped to
+        // ColadaMissingUserException so the app can tell the two apart.
+        self.onMain { completion(.failure(self.mapNativeError(error))) }
+      }
+    }
   }
 
   func flush(completion: @escaping (Result<Void, Error>) -> Void) {
-    completion(.failure(Self.notImplemented("flush")))
+    Task {
+      await ColadaSDK.shared.flush()
+      self.onMain { completion(.success(())) }
+    }
   }
+
+  // MARK: - ColadaHostApi
+  //
+  // Phase 11 replaces attribution, Phase 12 deep links.
 
   func currentAttribution(completion: @escaping (Result<NativeAttribution?, Error>) -> Void) {
     completion(.failure(Self.notImplemented("currentAttribution")))
@@ -163,6 +234,59 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   func handleDeepLink(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
     completion(.failure(Self.notImplemented("handleDeepLink")))
+  }
+
+  // MARK: - Event metadata (Phase 10)
+
+  /// Metadata keys the native `AttributionEventMetadata` can carry.
+  ///
+  /// Deliberately not `phoneNumber`: the backend accepts it there, but the
+  /// native SDK dropped it from this struct on privacy grounds and its privacy
+  /// manifest no longer declares it. On a registration it still travels, via
+  /// `ColadaUserInfo`.
+  private static let metadataKeys: Set<String> = ["amount", "currency", "orderId"]
+
+  /// Metadata keys `reportRegistration` can carry, via `ColadaUserInfo`.
+  private static let registrationKeys: Set<String> = ["name", "email", "phoneNumber"]
+
+  /// Builds the user data for a registration, or nil when the event carries
+  /// none — in which case it is reported as an ordinary event instead.
+  private static func userInfo(from metadata: [String: Any?]) -> ColadaUserInfo? {
+    let name = string(metadata, "name")
+    let email = string(metadata, "email")
+    let phoneNumber = string(metadata, "phoneNumber")
+    if name == nil, email == nil, phoneNumber == nil { return nil }
+    return ColadaUserInfo(name: name, email: email, phoneNumber: phoneNumber)
+  }
+
+  /// Builds the native metadata struct, or nil when nothing maps onto it.
+  ///
+  /// Every field is passed explicitly, including the nil ones: the native
+  /// initialiser defaults `currency` to "SAR", and letting that default apply
+  /// would attach a currency the app never sent.
+  private static func eventMetadata(from metadata: [String: Any?]) -> AttributionEventMetadata? {
+    let amount = double(metadata, "amount")
+    let currency = string(metadata, "currency")
+    let orderId = string(metadata, "orderId")
+    if amount == nil, currency == nil, orderId == nil { return nil }
+    return AttributionEventMetadata(amount: amount, currency: currency, orderId: orderId)
+  }
+
+  /// Reads a String, or nil if absent, null, or another type.
+  private static func string(_ metadata: [String: Any?], _ key: String) -> String? {
+    guard let wrapped = metadata[key] else { return nil }
+    return wrapped as? String
+  }
+
+  /// Reads a number as a Double.
+  ///
+  /// Dart sends `double`, but a whole number can arrive as an Int through the
+  /// channel codec, so accept any NSNumber rather than only Double.
+  private static func double(_ metadata: [String: Any?], _ key: String) -> Double? {
+    guard let wrapped = metadata[key] else { return nil }
+    if let value = wrapped as? Double { return value }
+    if let value = wrapped as? NSNumber { return value.doubleValue }
+    return nil
   }
 
   // MARK: - Unsupported capabilities (plan section 3e)
