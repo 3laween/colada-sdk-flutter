@@ -19,18 +19,28 @@ let package = Package(
         .library(name: "colada-sdk", targets: ["colada_sdk"])
     ],
     dependencies: [
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
+        .package(name: "FlutterFramework", path: "../FlutterFramework"),
+        // The native Colada iOS SDK. This public package carries no source: it
+        // declares a binaryTarget pointing at the Colada.xcframework.zip
+        // attached to its own GitHub release, which is the same artifact the
+        // CocoaPods pod vendors.
+        //
+        // Pinned exactly, and it must stay in lockstep with `s.dependency
+        // 'Colada'` in ../colada_sdk.podspec — a CocoaPods app reads that file
+        // and never this one, so the two pins drifting apart would ship
+        // different native versions to different hosts.
+        .package(url: "https://github.com/3laween/colada-sdk-ios.git", exact: "0.1.1"),
     ],
     targets: [
         .target(
             name: "colada_sdk",
             dependencies: [
-                .product(name: "FlutterFramework", package: "FlutterFramework")
+                .product(name: "FlutterFramework", package: "FlutterFramework"),
+                // Package identity comes from the URL's last path component, so
+                // it is "colada-sdk-ios" even though the package and its product
+                // are both named "Colada".
+                .product(name: "Colada", package: "colada-sdk-ios"),
             ]
-            // The native Colada iOS SDK dependency is added in Phase 9. It is
-            // published both as the CocoaPods pod `Colada` and as the public
-            // Swift package github.com/3laween/colada-sdk-ios, so both this
-            // manifest and the podspec have something to point at.
         )
     ]
 )

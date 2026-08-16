@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
   pull_request:
 
 # Pinned so a Flutter release can never silently change a build result: a red

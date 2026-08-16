@@ -17,13 +17,21 @@ A Flutter bridge over the native Colada iOS SDK for mobile attribution and event
   # colada_sdk/Package.swift. Both packaging formats must stay in step.
   s.source_files     = 'colada_sdk/Sources/colada_sdk/**/*.swift'
   s.dependency 'Flutter'
+  # The native Colada iOS SDK. A BINARY pod: its own podspec has an :http source
+  # pointing at Colada.xcframework.zip, so nothing is compiled from source here.
+  #
+  # Pinned exactly, and it must stay in lockstep with the version in
+  # colada_sdk/Package.swift — an app resolving this plugin through Swift Package
+  # Manager reads that file instead of this one, and two different native
+  # versions across the two packaging formats is a bug nobody would think to
+  # look for. Loosen to '~> 0.1' only once a second native version exists and
+  # compatibility has actually been proven.
+  s.dependency 'Colada', '0.1.1'
   s.platform = :ios, '13.0'
   s.swift_version = '5.9'
-  # Flutter plugin convention; also required so the binary Colada pod (added in
-  # Phase 9) links cleanly under use_frameworks!.
+  # Flutter plugin convention; also required so the binary Colada pod links
+  # cleanly under use_frameworks!.
   s.static_framework = true
-
-  # The native Colada pod ('Colada', 0.1.1) is added in Phase 9.
 
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
