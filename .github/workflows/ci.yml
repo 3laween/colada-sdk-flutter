@@ -149,6 +149,39 @@ jobs:
             cd example && flutter build ios --no-codesign --debug
           fi
 
+  integration-android:
+    name: Integration tests (Android emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - run: cd example && flutter pub get
+      # No tenant key in CI: the key-less tests (channel wiring, client-side
+      # validation) run and prove the Dart<->native round trip on a real
+      # emulator; the full backend flow self-skips. Supply COLADA_TENANT_KEY
+      # locally to run everything — never store a key in CI.
+      # iOS integration tests are expensive on hosted runners; run them locally
+      # and record results in doc/MANUAL_TEST_MATRIX.md.
+      - name: Run integration tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: default
+          script: cd example && flutter test integration_test/colada_flow_test.dart
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -171,4 +204,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check for internal-only references
-        run: bash tools/check-no-private-refs.sh
+        run: bash tool/check-no-private-refs.sh

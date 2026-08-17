@@ -51,3 +51,7 @@ GoogleService-Info.plist
 .env.*
 # Podfile.lock is intentionally NOT ignored — it is kept for reproducibility.
 
+# Paths are relative to this .gitignore (the repo root), so no repo-name prefix.
+/example/
+/doc/
+/test/
