@@ -1,15 +1,40 @@
-# colada_sdk
+# Colada SDK
 
 Flutter SDK for [Colada](https://coladaapp.io) — mobile attribution and event
 tracking. One async, type-safe Dart API over the native Colada Android and iOS
 SDKs: initialize once, identify your users, track the events that matter, and
 read back the campaign that drove each install.
 
+## How it works
+
+Colada answers one question for every install — **which ad campaign brought this
+user?** — and then lets you report what they do next so those conversions can be
+forwarded to the right ad platform.
+
+The main idea is that **you do almost nothing**. You call `Colada.initialize`
+once with your **public tenant key** (`pk_live_…`), and from there the native SDK
+owns the entire backend conversation:
+
+- **Auth is automatic.** It exchanges your tenant key for a short-lived session
+  token and attaches it to every backend request itself. You never see, store, or
+  refresh a token — there is no API for it, by design.
+- **Attribution is automatic.** On first install — and on any ad-driven deep-link
+  open — the SDK runs an *attribution handshake* on its own and resolves the
+  campaign (via the deep link, install referrer, clipboard, or a probabilistic
+  match). An ordinary app open does nothing.
+- **You just identify and track.** Call `setUser` after login/sign-up, and
+  `track` when meaningful events happen. The backend links each event to that
+  user's attribution and forwards it to the ad platform that drove the install.
+
+You read the resolved campaign back on a stream, and consume any deferred
+deep-link destination to route a first-time user to the right screen. That is the
+whole surface: **initialize → identify → track → read attribution.**
+
 ## Features
 
 - **One API, both platforms.** Android and iOS behave the same from Dart; where
-  they genuinely differ, the difference is documented, not hidden — see
-  [Platform differences](doc/PLATFORM_DIFFERENCES.md).
+  they genuinely differ, it is flagged in each method's API docs and made loud in
+  debug via `ColadaConfig.strictMode`.
 - **Type-safe events.** Nine lifecycle events as sealed classes; required fields
   are enforced by the compiler, not discovered at runtime.
 - **Typed failures.** Every error is a `ColadaException` — one `catch`, no raw
@@ -38,7 +63,7 @@ dependencies:
 
 **1. Initialize before `runApp`.** The SDK collects install signals that are
 only briefly available at launch, so initialize as the first thing in `main()`.
-Never hardcode your key — pass it at build time.
+Replace `YOU_PUBLIC_KEY` with your public tenant key (`pk_live_…`).
 
 ```dart
 import 'package:colada_sdk/colada_sdk.dart';
@@ -49,18 +74,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Colada.initialize(
     const ColadaConfig(
-      publicTenantKey: String.fromEnvironment('COLADA_TENANT_KEY'),
+      publicTenantKey: 'YOU_PUBLIC_KEY',
       strictMode: kDebugMode, // loud about platform gaps in debug
     ),
   );
   runApp(const MyApp());
 }
-```
-
-Run it with the key supplied at build time:
-
-```
-flutter run --dart-define=COLADA_TENANT_KEY=pk_live_xxxx...
 ```
 
 **2. Identify the user** after sign-up, after login, and on app start when
@@ -70,8 +89,8 @@ restoring a saved session:
 await Colada.setUser(user.id);
 ```
 
-> On iOS, call `setUser` **before** your first `track`. See
-> [Platform differences](doc/PLATFORM_DIFFERENCES.md).
+> On iOS, call `setUser` **before** your first `track` (see the `Colada.track`
+> API docs for the platform note).
 
 **3. Track events** when they happen:
 
@@ -94,20 +113,16 @@ if (link != null && link.hasDestination) {
 }
 ```
 
-Deep links need no setup beyond declaring your scheme — see
-[Deep links](doc/deep-links.md).
+Deep links need no setup beyond declaring your URL scheme — the plugin forwards
+what the OS delivers, so first-install and re-engagement handshakes happen on
+their own.
 
-## Documentation
+## Contributors
 
-- [Getting started](doc/getting-started.md)
-- [Events](doc/events.md)
-- [Attribution](doc/attribution.md)
-- [Deep links](doc/deep-links.md)
-- [Configuration](doc/configuration.md)
-- [Platform differences](doc/PLATFORM_DIFFERENCES.md)
-- [Troubleshooting](doc/troubleshooting.md)
+Built and maintained by:
 
-A complete, runnable app lives in [`example/`](example/).
+- **Adel Mostafa** — adelmostafamohamed12@gmail.com
+- **Amr Mahmoud** — Amr.mahmoud.elsayed33@gmail.com
 
 ## License
 
