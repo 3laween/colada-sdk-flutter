@@ -77,12 +77,14 @@ jobs:
           channel: stable
       - name: Build example APK
         # No-op until the example app lands in Phase 14. Wired now so the build
-        # gate cannot be forgotten.
+        # gate cannot be forgotten. Checks for pubspec.yaml, not just the
+        # directory — example/README.md documents the intended app already,
+        # which makes `-d example` true before the app itself is scaffolded.
         run: |
-          if [ -d example ]; then
+          if [ -f example/pubspec.yaml ]; then
             cd example && flutter pub get && flutter build apk --debug
           else
-            echo "example/ not present yet — skipping (wired for Phase 14)."
+            echo "example/ app not scaffolded yet — skipping (wired for Phase 14)."
           fi
 
   build-ios:
@@ -96,12 +98,14 @@ jobs:
           channel: stable
       - name: Build example iOS (no codesign)
         # No-op until the example app lands in Phase 14. Wired now so the build
-        # gate cannot be forgotten.
+        # gate cannot be forgotten. Checks for pubspec.yaml, not just the
+        # directory — example/README.md documents the intended app already,
+        # which makes `-d example` true before the app itself is scaffolded.
         run: |
-          if [ -d example ]; then
+          if [ -f example/pubspec.yaml ]; then
             cd example && flutter pub get && flutter build ios --no-codesign --debug
           else
-            echo "example/ not present yet — skipping (wired for Phase 14)."
+            echo "example/ app not scaffolded yet — skipping (wired for Phase 14)."
           fi
 
   latest-flutter:
@@ -136,16 +140,16 @@ jobs:
       # only, and these two steps announce that rather than passing silently.
       - name: Build example (Android) on newest stable
         run: |
-          if [ -d example ]; then
+          if [ -f example/pubspec.yaml ]; then
             cd example && flutter pub get && flutter build apk --debug
           else
-            echo "::warning::example/ does not exist yet (Phase 14). The KGP and"
+            echo "::warning::example/ is not scaffolded yet (Phase 14). The KGP and"
             echo "::warning::Swift Package Manager deprecations CANNOT be detected"
-            echo "::warning::until it does — this canary is Dart-only for now."
+            echo "::warning::until it is — this canary is Dart-only for now."
           fi
       - name: Build example (iOS) on newest stable
         run: |
-          if [ -d example ]; then
+          if [ -f example/pubspec.yaml ]; then
             cd example && flutter build ios --no-codesign --debug
           fi
 
@@ -167,7 +171,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # example/ is not scaffolded yet (Phase 14) — README.md documents the intended
+      # app, but there is no pubspec.yaml/integration_test/ for this job to run
+      # against. Skip cleanly rather than fail on a missing pubspec.yaml.
       - run: cd example && flutter pub get
+        if: hashFiles('example/pubspec.yaml') != ''
       # No tenant key in CI: the key-less tests (channel wiring, client-side
       # validation) run and prove the Dart<->native round trip on a real
       # emulator; the full backend flow self-skips. Supply COLADA_TENANT_KEY
@@ -175,6 +183,7 @@ jobs:
       # iOS integration tests are expensive on hosted runners; run them locally
       # and record results in doc/MANUAL_TEST_MATRIX.md.
       - name: Run integration tests on an emulator
+        if: hashFiles('example/pubspec.yaml') != ''
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
