@@ -109,7 +109,7 @@ Colada.attributionStream.listen((a) {
 
 final link = await Colada.consumeDeferredDeepLink();
 if (link != null && link.hasDestination) {
-  // navigate to link.storeId / link.menuItemId
+  // navigate using link.extras (e.g. link.extras['storeId'])
 }
 ```
 

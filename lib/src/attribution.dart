@@ -59,9 +59,6 @@ enum ColadaMatchMethod {
 class ColadaDeferredDeepLink {
   /// Creates a deferred deep link target.
   const ColadaDeferredDeepLink({
-    this.storeId,
-    this.menuItemId,
-    this.isCoffeeSubscription = false,
     this.extras = const <String, String>{},
   });
 
@@ -70,9 +67,6 @@ class ColadaDeferredDeepLink {
   factory ColadaDeferredDeepLink.fromMap(Map<String, Object?> map) {
     final rawExtras = map['extras'];
     return ColadaDeferredDeepLink(
-      storeId: map['storeId'] as String?,
-      menuItemId: map['menuItemId'] as String?,
-      isCoffeeSubscription: map['isCoffeeSubscription'] as bool? ?? false,
       extras: rawExtras is Map
           ? <String, String>{
               for (final entry in rawExtras.entries)
@@ -82,60 +76,41 @@ class ColadaDeferredDeepLink {
     );
   }
 
-  /// Colada store to open, if any.
-  final String? storeId;
-
-  /// Colada menu item to open, if any.
-  final String? menuItemId;
-
-  /// Whether the link targets a coffee-subscription flow.
-  final bool isCoffeeSubscription;
-
-  /// Any other destination parameters carried by the link.
+  /// The destination, as a single string map — the only surface for it.
   ///
-  /// **Android only.** The native iOS SDK does not surface additional
-  /// destination parameters, so this is always empty there. Do not build
-  /// navigation that works only when this map is populated.
+  /// Colada's own fields appear here under the keys `storeId`, `menuItemId` and
+  /// `isCoffeeSubscription` (the last as `'true'`/`'false'`) when the campaign
+  /// carried them, alongside any tenant-specific destination fields. There are
+  /// no typed destination properties anymore — read `extras['storeId']`. Both
+  /// platforms populate this identically for the same campaign.
   final Map<String, String> extras;
 
   /// True when there is genuinely somewhere to navigate.
   ///
   /// Check this before navigating: a link can resolve with no destination at
   /// all, in which case the correct behaviour is to leave the user where they
-  /// are.
+  /// are. The coffee-subscription flag alone is NOT a destination — it
+  /// qualifies one — so `isCoffeeSubscription` is the one key that does not
+  /// count; any other key does.
   bool get hasDestination =>
-      storeId != null || menuItemId != null || extras.isNotEmpty;
+      extras.keys.any((String key) => key != 'isCoffeeSubscription');
 
   /// Flat representation, for forwarding into your own analytics or logs.
   Map<String, Object?> toMap() => <String, Object?>{
-        'storeId': storeId,
-        'menuItemId': menuItemId,
-        'isCoffeeSubscription': isCoffeeSubscription,
         'extras': extras,
       };
 
   @override
-  String toString() => 'ColadaDeferredDeepLink(storeId: $storeId, '
-      'menuItemId: $menuItemId, isCoffeeSubscription: $isCoffeeSubscription, '
-      'extras: $extras)';
+  String toString() => 'ColadaDeferredDeepLink(extras: $extras)';
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ColadaDeferredDeepLink &&
-          other.storeId == storeId &&
-          other.menuItemId == menuItemId &&
-          other.isCoffeeSubscription == isCoffeeSubscription &&
-          _mapEquals(other.extras, extras);
+      other is ColadaDeferredDeepLink && _mapEquals(other.extras, extras);
 
   @override
-  int get hashCode => Object.hash(
-        storeId,
-        menuItemId,
-        isCoffeeSubscription,
-        Object.hashAllUnordered(
-          extras.entries.map((MapEntry<String, String> e) => (e.key, e.value)),
-        ),
+  int get hashCode => Object.hashAllUnordered(
+        extras.entries.map((MapEntry<String, String> e) => (e.key, e.value)),
       );
 }
 
@@ -255,13 +230,14 @@ class ColadaAttribution {
   /// would re-navigate a returning user.
   final ColadaDeferredDeepLink? deferredDeepLink;
 
-  /// Fields the backend returned that this SDK version does not model.
+  /// The campaign destination and any tenant params, as a string map.
   ///
-  /// Present so a backend addition is readable without upgrading the SDK. On
-  /// iOS this also carries the native SDK's diagnostic fields (`asn`,
-  /// `osVersion`, `screenResolution`, `rawLink`), which have no Android
-  /// counterpart — so the contents differ by platform even for the same
-  /// campaign. Do not build logic that requires a specific key here.
+  /// The same map [deferredDeepLink] exposes: `storeId`, `menuItemId` and
+  /// `isCoffeeSubscription` appear here under those keys when the campaign
+  /// carried them, plus any tenant-specific fields, so a backend addition is
+  /// readable without upgrading the SDK. Populated identically on both
+  /// platforms for the same campaign. (Typed `Object?` for API stability; the
+  /// values are strings.)
   final Map<String, Object?> extras;
 
   /// Flat representation, for forwarding into your own analytics or logs.

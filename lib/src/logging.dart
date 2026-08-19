@@ -42,10 +42,10 @@ enum ColadaLogLevel {
 /// Delivered on `Colada.logs`. Useful for piping SDK diagnostics into your own
 /// crash reporter, and for seeing why attribution behaved the way it did.
 ///
-/// **Coverage differs by platform.** On Android these records come from the
-/// native SDK's own log sink and are detailed. The native iOS SDK has no log
-/// sink, so on iOS the stream carries only records produced by this package's
-/// bridge. Never treat an absence of records on iOS as an absence of activity.
+/// Both native SDKs expose a log sink the plugin registers at initialize, so on
+/// Android and iOS alike these records come from the native SDK, plus a few the
+/// plugin's own bridge emits. Detail is governed by `ColadaConfig.debug` — with
+/// it off, only `warn` and `error` are emitted, matching the native SDKs.
 @immutable
 class ColadaLogRecord {
   /// Creates a log record.

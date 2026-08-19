@@ -362,12 +362,10 @@ class ColadaSdkPlugin :
     )
 
     private fun DeferredDeepLink.toNative(): NativeDeferredDeepLink =
-        NativeDeferredDeepLink(
-            storeId = storeId,
-            menuItemId = menuItemId,
-            isCoffeeSubscription = isCoffeeSubscription,
-            extras = extras,
-        )
+        // The destination is now a single string map; the native SDK exposes no
+        // typed store/menu/coffee fields anymore. storeId/menuItemId/
+        // isCoffeeSubscription live inside `extras` under those keys.
+        NativeDeferredDeepLink(extras = extras)
 
     private companion object {
         const val MAX_PENDING_LINKS = 5

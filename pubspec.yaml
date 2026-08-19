@@ -2,7 +2,7 @@ name: colada_sdk
 description: >-
   Flutter SDK for Colada mobile attribution and event tracking. A single-package
   bridge over the native Colada Android and iOS SDKs.
-version: 0.1.1
+version: 0.2.0
 repository: https://github.com/3laween/colada-sdk-flutter
 homepage: https://github.com/3laween/colada-sdk-flutter
 issue_tracker: https://github.com/3laween/colada-sdk-flutter/issues
@@ -27,7 +27,11 @@ dev_dependencies:
   # platform ever forces federation, D4) and pigeon (the Dart<->native schema
   # generator, first used in Phase 4).
   plugin_platform_interface: ^2.1.8
-  pigeon: ^27.3.0
+  # Exact-pinned, not ^27.3.0: pigeon stamps its own version into every generated
+  # file's header comment, so a floating constraint makes "Pigeon codegen is
+  # current" flaky — it fails whenever pub.dev ships a new pigeon patch between
+  # a local regen and CI's `flutter pub get`, with no schema change involved.
+  pigeon: 27.3.1
 
 # This is a method-channel plugin, not a Dart-only or federated one, so it
 # declares android + ios directly with no default_package and no

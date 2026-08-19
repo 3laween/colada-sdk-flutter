@@ -29,10 +29,12 @@ import UIKit
 ///
 /// ### What the bridge owns on iOS
 ///
-/// `isInitialized`, `debug`, `strictMode` and `existingDeviceId` have no native
-/// equivalent — the Android SDK has all four, the iOS SDK none. The bridge
-/// therefore tracks them itself: its own initialized flag, its own verbose
-/// logging, and the warn-versus-throw tiers for capabilities iOS cannot offer.
+/// `isInitialized`, `strictMode` and `existingDeviceId` have no native
+/// equivalent the bridge uses: it tracks its own initialized flag, keeps
+/// `strictMode` for the warn-versus-throw tiers on capabilities iOS cannot
+/// offer, and refuses `existingDeviceId`. `debug` IS now forwarded to the
+/// native SDK, so its log sink honours it — the bridge also keeps a copy to
+/// gate the records it emits itself.
 public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   /// The bridge's own flag: true once `configure()` has returned without
@@ -128,7 +130,20 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
         // backend host is not configurable: a public package must not let
         // anyone point the SDK at an arbitrary host, and on iOS it is a
         // compile-time constant in the native binary regardless.
-        try await ColadaSDK.shared.configure(apiKey: config.publicTenantKey)
+        //
+        // `debug` is forwarded so the native SDK's own log sink honours it
+        // (only warn/error unless debug is on); `logSink` pipes every native
+        // record onto the Dart `Colada.logs` stream. strictMode is left `false`
+        // on the native call — the bridge keeps owning it for the iOS-capability
+        // tiers — so an internal failure surfaces as its specific ColadaError
+        // (which mapNativeError turns into a typed Dart exception) rather than a
+        // strictModeViolation wrapper.
+        try await ColadaSDK.shared.configure(
+          apiKey: config.publicTenantKey,
+          strictMode: false,
+          debug: self.debug,
+          logSink: self.makeNativeLogSink()
+        )
         self.onMain {
           self.initialized = true
           self.emitLog(ColadaLogLevel.debug, "Native Colada iOS SDK configured.")
@@ -165,17 +180,25 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   func setUser(externalUserId: String, completion: @escaping (Result<Void, Error>) -> Void) {
     Task {
-      await ColadaSDK.shared.setExternalUserId(externalUserId)
-      self.onMain { completion(.success(())) }
+      do {
+        // `setExternalUserId(_:)` is now non-optional and `throws`: a blank id
+        // is rejected. Dart already guarantees a non-blank id, and in the
+        // non-strict native config a rejection is logged-and-swallowed rather
+        // than thrown, but the throwing signature is handled here regardless.
+        try await ColadaSDK.shared.setExternalUserId(externalUserId)
+        self.onMain { completion(.success(())) }
+      } catch {
+        self.onMain { completion(.failure(self.mapNativeError(error))) }
+      }
     }
   }
 
   func clearUser(completion: @escaping (Result<Void, Error>) -> Void) {
     Task {
-      // The native SDK models "no user" as a nil external id. Note the
-      // divergence this leaves: Android flushes the outgoing user's queued
-      // events before clearing, iOS does not.
-      await ColadaSDK.shared.setExternalUserId(nil)
+      // The native SDK now has an explicit `clearUser()` (it used to be modelled
+      // as `setExternalUserId(nil)`). Like Android, it flushes the outgoing
+      // user's still-queued events under that identity before clearing.
+      await ColadaSDK.shared.clearUser()
       self.onMain { completion(.success(())) }
     }
   }
@@ -235,9 +258,10 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
         }
         self.onMain { completion(.success(())) }
       } catch {
-        // Includes .missingExternalUserId — tracking before setUser is a
-        // hard failure on iOS where Android holds the event. Mapped to
-        // ColadaMissingUserException so the app can tell the two apart.
+        // A genuine delivery/backend failure. Tracking before setUser is NOT an
+        // error anymore: the native SDK buffers-and-holds it (Android parity)
+        // and returns a benign result, so that path completes successfully above
+        // rather than throwing here.
         self.onMain { completion(.failure(self.mapNativeError(error))) }
       }
     }
@@ -404,9 +428,10 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
   /// already broadcast on the attribution stream, and the Dart API is
   /// fire-and-forget on both platforms.
   private func report(_ url: URL) {
-    // The only diagnostic there is on this platform: the native iOS SDK has no
-    // log sink, so without this an integrator debugging attribution cannot tell
-    // "the link never reached the SDK" from "the SDK saw it and dropped it".
+    // A bridge-level breadcrumb: it marks the moment the link crossed from the
+    // plugin into the native SDK, so an integrator debugging attribution can
+    // tell "the link never reached the SDK" from "the SDK saw it and dropped
+    // it" — the native SDK's own log sink records what happens after this.
     emitLog(ColadaLogLevel.debug, "Reported a deep link: \(url)")
     Task { _ = await ColadaSDK.shared.handleDeepLink(url) }
   }
@@ -448,23 +473,14 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
   /// Flattens the native handshake result into the shape Dart sees on both
   /// platforms.
   ///
-  /// Two deliberate differences from a straight field copy:
-  ///
-  /// - The native result is flat, with the deferred-deep-link fields sitting
-  ///   alongside the campaign ones. Android nests them, so they are nested here
-  ///   too and the Dart model has one shape everywhere.
-  /// - `asn`, `osVersion`, `screenResolution` and `rawLink` have no Android
-  ///   counterpart, so rather than dropping them they are folded into `extras`,
-  ///   where the Dart model already carries anything neither SDK models.
+  /// The native result is flat, with no nested deferred-deep-link object;
+  /// Android nests one, so it is nested here too and the Dart model has one
+  /// shape everywhere. `extras` is the campaign destination + tenant params —
+  /// the exact map the deferred deep link carries, matching Android. (The native
+  /// result's diagnostic fields `asn`/`osVersion`/`screenResolution`/`rawLink`
+  /// are no longer surfaced: they have no Android counterpart, and the core
+  /// dropped them from `extras`.)
   private static func attribution(from result: AttributionHandshakeResult) -> NativeAttribution {
-    var extras: [String: Any?] = [:]
-    if let asn = result.asn { extras["asn"] = asn }
-    if let osVersion = result.osVersion { extras["osVersion"] = osVersion }
-    if let screenResolution = result.screenResolution {
-      extras["screenResolution"] = screenResolution
-    }
-    if let rawLink = result.rawLink { extras["rawLink"] = rawLink }
-
     return NativeAttribution(
       matched: result.matched,
       // The backend's own wire string, parsed in Dart with an `unknown`
@@ -479,39 +495,36 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       attributionId: result.attributionId,
       tenantKey: result.tenantKey,
       deferredDeepLink: deferredDeepLink(from: result),
-      extras: extras
+      extras: result.extras.mapValues { $0 as Any? }
     )
   }
 
-  /// Synthesises the nested deferred deep link, or nil when the handshake
-  /// carried no destination — matching Android, which reports nil rather than
-  /// an empty target.
+  /// Synthesises the nested deferred deep link from the result's destination
+  /// map, or nil when the handshake carried no destination — matching Android,
+  /// which reports nil rather than an empty target. The result's `extras` IS the
+  /// destination map (identical to what `consumeDeferredDeepLink()` returns).
   private static func deferredDeepLink(from result: AttributionHandshakeResult)
     -> NativeDeferredDeepLink?
   {
-    let isSubscription = result.isCoffeeSubscription ?? false
-    guard result.attributionStoreId != nil || result.attributionMenuItemId != nil
-      || isSubscription
-    else {
-      return nil
-    }
-    return NativeDeferredDeepLink(
-      storeId: result.attributionStoreId,
-      menuItemId: result.attributionMenuItemId,
-      isCoffeeSubscription: isSubscription,
-      // Always empty on iOS: the native SDK surfaces no additional parameters
-      // for a deferred deep link, where Android carries the handshake's extras.
-      extras: [:]
-    )
+    deferredDeepLink(fromExtras: result.extras)
   }
 
   private static func deferredDeepLink(from link: DeferredDeepLink) -> NativeDeferredDeepLink {
-    NativeDeferredDeepLink(
-      storeId: link.storeId,
-      menuItemId: link.menuItemId,
-      isCoffeeSubscription: link.isCoffeeSubscription ?? false,
-      extras: [:]
-    )
+    NativeDeferredDeepLink(extras: link.extras)
+  }
+
+  /// Builds a nested deep link when `extras` names a destination, else nil.
+  ///
+  /// A destination exists when `extras` has any key OTHER than
+  /// `isCoffeeSubscription` — the coffee flag qualifies a destination, it is not
+  /// one on its own. This is the core's own `hasDestination` rule.
+  private static func deferredDeepLink(fromExtras extras: [String: String])
+    -> NativeDeferredDeepLink?
+  {
+    guard extras.keys.contains(where: { $0 != "isCoffeeSubscription" }) else {
+      return nil
+    }
+    return NativeDeferredDeepLink(extras: extras)
   }
 
   // MARK: - Event metadata (Phase 10)
@@ -539,9 +552,10 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   /// Builds the native metadata struct, or nil when nothing maps onto it.
   ///
-  /// Every field is passed explicitly, including the nil ones: the native
-  /// initialiser defaults `currency` to "SAR", and letting that default apply
-  /// would attach a currency the app never sent.
+  /// Every field is passed explicitly, including the nil ones. The native SDK no
+  /// longer defaults `currency` (the old "SAR" default was removed) and now
+  /// rejects a Purchase/Subscribe missing a required field — but Dart's own
+  /// event validation has already enforced those before we reach here.
   private static func eventMetadata(from metadata: [String: Any?]) -> AttributionEventMetadata? {
     let amount = double(metadata, "amount")
     let currency = string(metadata, "currency")
@@ -592,15 +606,45 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   // MARK: - Logging
 
-  /// Emits a bridge-level log record. Dropped when nothing is listening.
+  /// Emits a BRIDGE-level log record. Dropped when nothing is listening.
   ///
-  /// `debug` records are emitted only when the integrator asked for them; the
-  /// native iOS SDK has no log sink of its own, so every record on this stream
-  /// comes from here.
+  /// `debug` records are emitted only when the integrator asked for them. These
+  /// are the plugin's own diagnostics (deep-link buffering, unsupported
+  /// capabilities); records from the native SDK itself arrive via the log sink
+  /// installed at `configure` — see ``makeNativeLogSink()``.
   fileprivate func emitLog(_ level: String, _ message: String, error: String? = nil) {
     if level == ColadaLogLevel.debug && !debug { return }
     let record = NativeLogRecord(level: level, message: message, error: error)
     onMain { self.logEventSink?.success(record) }
+  }
+
+  /// Builds the native SDK's log sink, forwarding every record it emits onto the
+  /// Dart `Colada.logs` stream.
+  ///
+  /// The native SDK applies its own `debug` filtering before calling this (only
+  /// `warn`/`error` unless `debug` is on), so records arrive already gated and
+  /// are forwarded as-is rather than re-run through ``emitLog(_:_:error:)``. The
+  /// sink is invoked on a background thread, so it hops to the main thread like
+  /// every other event-sink write. `Colada.ColadaLogLevel` is qualified only by
+  /// inference here (the closure's parameter type comes from `ColadaLogSink`);
+  /// the file's own `ColadaLogLevel` holds the lowercase wire strings.
+  private func makeNativeLogSink() -> ColadaLogSink {
+    return { [weak self] level, message, error in
+      let wire: String
+      switch level {
+      case .debug: wire = ColadaLogLevel.debug
+      case .info: wire = ColadaLogLevel.info
+      case .warn: wire = ColadaLogLevel.warn
+      case .error: wire = ColadaLogLevel.error
+      @unknown default: wire = ColadaLogLevel.info
+      }
+      let record = NativeLogRecord(
+        level: wire,
+        message: message,
+        error: error.map { String(describing: $0) }
+      )
+      self?.onMain { self?.logEventSink?.success(record) }
+    }
   }
 
   // MARK: - Error mapping
@@ -642,6 +686,10 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       )
 
     case .missingExternalUserId:
+      // Retained for exhaustiveness only: the native SDK no longer raises this.
+      // Tracking before setUser is buffered-and-held on iOS now (Android
+      // parity), so it never reaches here. Kept mapped in case an older native
+      // binary still throws it.
       return coladaError(
         code: ColadaErrorCode.missingUser,
         message: "Call Colada.setUser before tracking an event on iOS."
@@ -681,6 +729,48 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       return coladaError(
         code: ColadaErrorCode.deviceIdentityUnavailable,
         message: "The device identity could not be read from the Keychain. Try again later."
+      )
+
+    case .invalidConfiguration(let reason):
+      // Only thrown under native strictMode, which the bridge does not enable —
+      // Dart validates the config first regardless. Mapped for exhaustiveness.
+      return coladaError(
+        code: ColadaErrorCode.invalidConfig,
+        message: reason
+      )
+
+    case .invalidExternalUserId:
+      // Not reached in practice: Dart rejects a blank id before the call, and
+      // the non-strict native path logs-and-swallows a blank id rather than
+      // throwing. Mapped for exhaustiveness.
+      return coladaError(
+        code: ColadaErrorCode.invalidConfig,
+        message: "externalUserId must not be blank."
+      )
+
+    case .invalidEventMetadata(let reason):
+      // A Purchase/Subscribe missing a required field. Dart's event validation
+      // rejects it first; mapped here for exhaustiveness and defence in depth.
+      return coladaError(
+        code: ColadaErrorCode.invalidEvent,
+        message: reason
+      )
+
+    case .strictModeViolation(let operation, let underlying):
+      // The bridge configures the native SDK non-strict, so this wrapper is not
+      // reached today; mapped for exhaustiveness should strictMode ever be
+      // forwarded to the native call.
+      return coladaError(
+        code: ColadaErrorCode.invalidEvent,
+        message: "\(operation) failed: \(underlying)"
+      )
+
+    @unknown default:
+      // A native error case added in a newer core than this bridge knows about.
+      // Report it rather than crashing on a non-exhaustive switch.
+      return coladaError(
+        code: ColadaErrorCode.network,
+        message: "The native Colada SDK failed: \(error)"
       )
     }
   }

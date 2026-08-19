@@ -68,31 +68,27 @@ class NativeConfig {
 
 /// Deferred deep-link target.
 ///
-/// On iOS this is synthesised by the bridge from the flat handshake result's
-/// `attributionStoreId` / `attributionMenuItemId` / `isCoffeeSubscription`, so
-/// the Dart layer sees one shape on both platforms. `extras` is always empty
-/// there — the native iOS SDK does not surface additional parameters.
+/// The destination is carried entirely in [extras]. Both native SDKs now expose
+/// the deferred deep link as a single `Map<String, String>`: `storeId`,
+/// `menuItemId` and `isCoffeeSubscription` appear there under those exact keys
+/// when present, alongside any tenant-specific destination fields. There are no
+/// typed destination properties anymore, so the Dart layer sees one shape on
+/// both platforms.
 class NativeDeferredDeepLink {
   NativeDeferredDeepLink({
-    required this.isCoffeeSubscription,
     required this.extras,
-    this.storeId,
-    this.menuItemId,
   });
 
-  String? storeId;
-  String? menuItemId;
-  bool isCoffeeSubscription;
   Map<String, String> extras;
 }
 
 /// A resolved attribution.
 ///
 /// `matchMethod` is the raw backend string — see the note at the top of this
-/// file. `extras` carries anything the backend returned that neither SDK
-/// models; on iOS the bridge also folds the native result's diagnostic fields
-/// (`asn`, `osVersion`, `screenResolution`, `rawLink`) in here, since they have
-/// no Android counterpart.
+/// file. `extras` carries the campaign destination and any tenant params as a
+/// string map — the same map [deferredDeepLink] exposes — so a backend field
+/// neither SDK models is still readable. (It is typed `Object?` here only to
+/// keep the public Dart model's `extras` type stable; both SDKs send strings.)
 class NativeAttribution {
   NativeAttribution({
     required this.matched,
@@ -218,7 +214,8 @@ abstract class ColadaEventChannels {
 
   /// Diagnostic log records.
   ///
-  /// Rich on Android, where the native SDK has a log sink. Bridge-level only on
-  /// iOS, which has none.
+  /// Both native SDKs now expose a log sink the bridge registers at
+  /// `configure`, so records come from the native SDK on Android and iOS alike,
+  /// plus the bridge's own records on each.
   NativeLogRecord logEmitted();
 }

@@ -52,6 +52,9 @@ GoogleService-Info.plist
 # Podfile.lock is intentionally NOT ignored — it is kept for reproducibility.
 
 # Paths are relative to this .gitignore (the repo root), so no repo-name prefix.
-/example/
+# The example app is not published (it carries a real key + build artifacts),
+# except its usage README — pub.dev renders example/README.md as the Example tab.
+/example/*
+!/example/README.md
 /doc/
 /test/
