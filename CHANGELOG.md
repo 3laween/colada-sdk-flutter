@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-Synced with the native cores' latest public API. **Breaking** changes are marked;
-they warrant a minor/major version bump before publishing.
+Synced with the native cores' latest public API, and pins both natives at 0.2.0.
+**Breaking** changes are marked — migrate before upgrading.
 
 - **BREAKING — `ColadaDeferredDeepLink` is extras-only.** The typed `storeId`,
   `menuItemId` and `isCoffeeSubscription` properties were removed; the
