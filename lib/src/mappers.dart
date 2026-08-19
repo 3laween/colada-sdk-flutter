@@ -46,9 +46,6 @@ ColadaDeferredDeepLink deferredDeepLinkFromNative(
   NativeDeferredDeepLink native,
 ) =>
     ColadaDeferredDeepLink(
-      storeId: native.storeId,
-      menuItemId: native.menuItemId,
-      isCoffeeSubscription: native.isCoffeeSubscription,
       extras: Map<String, String>.unmodifiable(native.extras),
     );
 

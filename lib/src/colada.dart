@@ -132,9 +132,10 @@ abstract final class Colada {
   /// [ColadaBackendRejectedException] — the event is still queued for retry in
   /// the first case. Do not gate your UI on this `Future` resolving.
   ///
-  /// ⚠️ On iOS, tracking before [setUser] throws
-  /// [ColadaMissingUserException]; on Android the event is held and released
-  /// once a user is known. Call [setUser] first and the difference disappears.
+  /// Tracking before [setUser] is **not** an error on either platform: the
+  /// event is held on-device and delivered once a user is known (or the next
+  /// [clearUser]), matching the native SDKs' buffer-and-hold. Call [setUser]
+  /// first when you can, so the held event carries the right identity sooner.
   static Future<void> track(ColadaEvent event) async {
     event.validate();
     return ColadaBridge.instance.track(event.eventName, event.metadata);

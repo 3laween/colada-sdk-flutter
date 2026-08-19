@@ -252,68 +252,55 @@ struct NativeConfig: Hashable, CustomStringConvertible {
 
 /// Deferred deep-link target.
 ///
-/// On iOS this is synthesised by the bridge from the flat handshake result's
-/// `attributionStoreId` / `attributionMenuItemId` / `isCoffeeSubscription`, so
-/// the Dart layer sees one shape on both platforms. `extras` is always empty
-/// there — the native iOS SDK does not surface additional parameters.
+/// The destination is carried entirely in [extras]. Both native SDKs now expose
+/// the deferred deep link as a single `Map<String, String>`: `storeId`,
+/// `menuItemId` and `isCoffeeSubscription` appear there under those exact keys
+/// when present, alongside any tenant-specific destination fields. There are no
+/// typed destination properties anymore, so the Dart layer sees one shape on
+/// both platforms.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeDeferredDeepLink: Hashable, CustomStringConvertible {
-  var storeId: String? = nil
-  var menuItemId: String? = nil
-  var isCoffeeSubscription: Bool
   var extras: [String: String]
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> NativeDeferredDeepLink? {
-    let storeId: String? = nilOrValue(pigeonVar_list[0])
-    let menuItemId: String? = nilOrValue(pigeonVar_list[1])
-    let isCoffeeSubscription = pigeonVar_list[2] as! Bool
-    let extras = pigeonVar_list[3] as! [String: String]
+    let extras = pigeonVar_list[0] as! [String: String]
 
     return NativeDeferredDeepLink(
-      storeId: storeId,
-      menuItemId: menuItemId,
-      isCoffeeSubscription: isCoffeeSubscription,
       extras: extras
     )
   }
   func toList() -> [Any?] {
     return [
-      storeId,
-      menuItemId,
-      isCoffeeSubscription,
-      extras,
+      extras
     ]
   }
   static func == (lhs: NativeDeferredDeepLink, rhs: NativeDeferredDeepLink) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return MessagesPigeonInternal.deepEquals(lhs.storeId, rhs.storeId) && MessagesPigeonInternal.deepEquals(lhs.menuItemId, rhs.menuItemId) && MessagesPigeonInternal.deepEquals(lhs.isCoffeeSubscription, rhs.isCoffeeSubscription) && MessagesPigeonInternal.deepEquals(lhs.extras, rhs.extras)
+    return MessagesPigeonInternal.deepEquals(lhs.extras, rhs.extras)
   }
 
   func hash(into hasher: inout Hasher) {
     hasher.combine("NativeDeferredDeepLink")
-    MessagesPigeonInternal.deepHash(value: storeId, hasher: &hasher)
-    MessagesPigeonInternal.deepHash(value: menuItemId, hasher: &hasher)
-    MessagesPigeonInternal.deepHash(value: isCoffeeSubscription, hasher: &hasher)
     MessagesPigeonInternal.deepHash(value: extras, hasher: &hasher)
   }
 
   public var description: String {
-    return "NativeDeferredDeepLink(storeId: \(String(describing: storeId)), menuItemId: \(String(describing: menuItemId)), isCoffeeSubscription: \(String(describing: isCoffeeSubscription)), extras: \(String(describing: extras)))"
+    return "NativeDeferredDeepLink(extras: \(String(describing: extras)))"
   }
 }
 
 /// A resolved attribution.
 ///
 /// `matchMethod` is the raw backend string — see the note at the top of this
-/// file. `extras` carries anything the backend returned that neither SDK
-/// models; on iOS the bridge also folds the native result's diagnostic fields
-/// (`asn`, `osVersion`, `screenResolution`, `rawLink`) in here, since they have
-/// no Android counterpart.
+/// file. `extras` carries the campaign destination and any tenant params as a
+/// string map — the same map [deferredDeepLink] exposes — so a backend field
+/// neither SDK models is still readable. (It is typed `Object?` here only to
+/// keep the public Dart model's `extras` type stable; both SDKs send strings.)
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeAttribution: Hashable, CustomStringConvertible {
