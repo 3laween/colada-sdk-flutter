@@ -32,6 +32,11 @@ they warrant a minor/major version bump before publishing.
   same map the deferred deep link carries), identical across platforms; it no
   longer carries iOS-only diagnostics (`asn`/`osVersion`/`screenResolution`/
   `rawLink`).
+- **Native cores pinned to 0.2.0.** The attribution handshake request now also
+  carries `deviceModel` (both platforms) and, Android only, `buildId` (sent on
+  the wire as `buildFingerprint`) — install-side device signals for the
+  backend's probabilistic matching. Request-only: no Dart API change, nothing
+  new exposed on `ColadaAttribution`.
 
 ## 0.1.1
 
