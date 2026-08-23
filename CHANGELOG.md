@@ -11,8 +11,8 @@ Documentation-only release. No API or behavior changes.
 
 ## 0.2.0
 
-Synced with the native cores' latest public API. **Breaking** changes are marked
-— migrate before upgrading.
+Synced with the native cores' latest public API, and pins both natives at 0.2.0.
+**Breaking** changes are marked — migrate before upgrading.
 
 - **BREAKING — `ColadaDeferredDeepLink` is extras-only.** The typed `storeId`,
   `menuItemId` and `isCoffeeSubscription` properties were removed; the
