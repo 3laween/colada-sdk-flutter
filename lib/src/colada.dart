@@ -117,6 +117,10 @@ abstract final class Colada {
   /// is cleared, so one user's activity is never attributed to whoever logs in
   /// next. The device identifier is unchanged — it identifies the device, not
   /// the person.
+  ///
+  /// ```dart
+  /// await Colada.clearUser();
+  /// ```
   static Future<void> clearUser() => ColadaBridge.instance.clearUser();
 
   /// Reports a user-lifecycle event. See [ColadaEvent] for when to fire each.
@@ -148,6 +152,12 @@ abstract final class Colada {
   ///
   /// It is a *request*, not a guarantee: an event whose backoff has not elapsed
   /// stays queued.
+  ///
+  /// ```dart
+  /// // e.g. just before signing the user out:
+  /// await Colada.flush();
+  /// await Colada.clearUser();
+  /// ```
   static Future<void> flush() => ColadaBridge.instance.flush();
 
   /// The attribution resolved for this device, or `null` if it has not resolved
@@ -185,6 +195,13 @@ abstract final class Colada {
   /// Call once, after the user reaches a point where navigation makes sense —
   /// typically after your splash screen hands off, or after sign-up. Check
   /// [ColadaDeferredDeepLink.hasDestination] before navigating.
+  ///
+  /// ```dart
+  /// final link = await Colada.consumeDeferredDeepLink();
+  /// if (link != null && link.hasDestination) {
+  ///   navigateToStore(link.extras['storeId']);
+  /// }
+  /// ```
   static Future<ColadaDeferredDeepLink?> consumeDeferredDeepLink() =>
       ColadaBridge.instance.consumeDeferredDeepLink();
 
@@ -208,5 +225,9 @@ abstract final class Colada {
   /// [ColadaConfig.debug] for verbose records.
   ///
   /// ⚠️ Coverage differs by platform — see [ColadaLogRecord].
+  ///
+  /// ```dart
+  /// Colada.logs.listen((record) => myCrashReporter.log(record.message));
+  /// ```
   static Stream<ColadaLogRecord> get logs => ColadaBridge.instance.logs;
 }

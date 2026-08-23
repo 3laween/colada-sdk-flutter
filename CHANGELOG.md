@@ -1,9 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
-Synced with the native cores' latest public API. **Breaking** changes are marked;
-they warrant a minor/major version bump before publishing.
+Documentation-only release. No API or behavior changes.
+
+- **Docs:** every public event (`AddToCart`, `Purchase`, `Login`,
+  `CompleteRegistration`, …) and every `Colada` facade method now carries a
+  short "how to use it" description and a usage example, so the API is
+  self-documenting at the call site.
+
+## 0.2.0
+
+Synced with the native cores' latest public API. **Breaking** changes are marked
+— migrate before upgrading.
 
 - **BREAKING — `ColadaDeferredDeepLink` is extras-only.** The typed `storeId`,
   `menuItemId` and `isCoffeeSubscription` properties were removed; the
