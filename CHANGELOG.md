@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+Documentation-only release. No API or behavior changes.
+
+- **Docs:** every public event (`AddToCart`, `Purchase`, `Login`,
+  `CompleteRegistration`, …) and every `Colada` facade method now carries a
+  short "how to use it" description and a usage example, so the API is
+  self-documenting at the call site.
+
 ## 0.2.0
 
 Synced with the native cores' latest public API, and pins both natives at 0.2.0.
@@ -28,15 +37,8 @@ Synced with the native cores' latest public API, and pins both natives at 0.2.0.
 - **`Colada.logs` is now rich on iOS too.** The plugin registers a native
   `logSink` on both platforms (the iOS core gained one), so SDK records flow to
   the stream on iOS as well as Android. Verbosity follows `ColadaConfig.debug`.
-- `ColadaAttribution.extras` is now the campaign destination + tenant params (the
-  same map the deferred deep link carries), identical across platforms; it no
-  longer carries iOS-only diagnostics (`asn`/`osVersion`/`screenResolution`/
-  `rawLink`).
-- **Native cores pinned to 0.2.0.** The attribution handshake request now also
-  carries `deviceModel` (both platforms) and, Android only, `buildId` (sent on
-  the wire as `buildFingerprint`) — install-side device signals for the
-  backend's probabilistic matching. Request-only: no Dart API change, nothing
-  new exposed on `ColadaAttribution`.
+- **Native cores pinned to 0.2.0.** Picks up the latest native attribution
+  improvements. No Dart API or behavior change on the Flutter side.
 
 ## 0.1.1
 

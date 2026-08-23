@@ -90,6 +90,14 @@ sealed class ColadaEvent {
 ///
 /// All three are optional and sent raw. The backend hashes [phoneNumber] before
 /// forwarding to ad platforms.
+///
+/// ```dart
+/// // Right after your own sign-up call returns and you have set the user:
+/// await Colada.setUser(user.id);
+/// await Colada.track(
+///   CompleteRegistration(name: user.name, email: user.email),
+/// );
+/// ```
 final class CompleteRegistration extends ColadaEvent {
   /// Creates a registration event carrying whatever the sign-up form collected.
   ///
@@ -133,6 +141,12 @@ final class CompleteRegistration extends ColadaEvent {
 /// **Not on every app open.** Restoring a saved session is not a login — call
 /// `Colada.setUser` for that and do not fire this event, or a daily-active user
 /// generates dozens of conversion events per day.
+///
+/// ```dart
+/// // In your login handler, after credentials are accepted:
+/// await Colada.setUser(user.id);
+/// await Colada.track(const Login());
+/// ```
 final class Login extends ColadaEvent {
   /// Creates a login event.
   const Login({this.extras = const <String, Object?>{}});
@@ -148,6 +162,13 @@ final class Login extends ColadaEvent {
 }
 
 /// Fire after a payment has successfully completed — not when it is initiated.
+///
+/// ```dart
+/// // Once the payment gateway confirms the charge:
+/// await Colada.track(
+///   Purchase(amount: 49.99, currency: 'SAR', orderId: order.id),
+/// );
+/// ```
 final class Purchase extends ColadaEvent {
   /// Creates a purchase event.
   ///
@@ -188,6 +209,11 @@ final class Purchase extends ColadaEvent {
 }
 
 /// Fire when a subscription is activated.
+///
+/// ```dart
+/// // After the subscription is confirmed active:
+/// await Colada.track(const Subscribe(amount: 9.99, currency: 'SAR'));
+/// ```
 final class Subscribe extends ColadaEvent {
   /// Creates a subscription event.
   const Subscribe({required this.amount, required this.currency});
@@ -216,6 +242,14 @@ final class Subscribe extends ColadaEvent {
 }
 
 /// Fire when a user adds an item to their cart.
+///
+/// Attach whatever context is useful via [extras].
+///
+/// ```dart
+/// await Colada.track(
+///   AddToCart(extras: {'itemId': item.id, 'price': item.price}),
+/// );
+/// ```
 final class AddToCart extends ColadaEvent {
   /// Creates an add-to-cart event.
   const AddToCart({this.extras = const <String, Object?>{}});
@@ -231,6 +265,12 @@ final class AddToCart extends ColadaEvent {
 }
 
 /// Fire when a user starts the checkout flow, before payment.
+///
+/// ```dart
+/// await Colada.track(
+///   InitiateCheckout(extras: {'cartTotal': cartTotal}),
+/// );
+/// ```
 final class InitiateCheckout extends ColadaEvent {
   /// Creates a checkout-started event.
   const InitiateCheckout({this.extras = const <String, Object?>{}});
@@ -246,6 +286,12 @@ final class InitiateCheckout extends ColadaEvent {
 }
 
 /// Fire when a user views a product, store page, or menu item.
+///
+/// ```dart
+/// await Colada.track(
+///   ViewContent(extras: {'contentId': product.id, 'type': 'product'}),
+/// );
+/// ```
 final class ViewContent extends ColadaEvent {
   /// Creates a content-viewed event.
   const ViewContent({this.extras = const <String, Object?>{}});
@@ -261,6 +307,12 @@ final class ViewContent extends ColadaEvent {
 }
 
 /// Fire when a user submits an order, before payment is confirmed.
+///
+/// ```dart
+/// await Colada.track(
+///   PlaceAnOrder(extras: {'orderId': order.id, 'total': order.total}),
+/// );
+/// ```
 final class PlaceAnOrder extends ColadaEvent {
   /// Creates an order-placed event.
   const PlaceAnOrder({this.extras = const <String, Object?>{}});
@@ -276,6 +328,12 @@ final class PlaceAnOrder extends ColadaEvent {
 }
 
 /// Fire when a user performs a search within the app.
+///
+/// ```dart
+/// await Colada.track(
+///   Search(extras: {'query': query, 'resultCount': results.length}),
+/// );
+/// ```
 final class Search extends ColadaEvent {
   /// Creates a search event.
   const Search({this.extras = const <String, Object?>{}});
@@ -300,6 +358,13 @@ final class Search extends ColadaEvent {
 ///
 /// The backend rejects unknown names with a 400, and this SDK cannot check the
 /// name for you.
+///
+/// ```dart
+/// // Android only — prefer a typed event whenever one exists:
+/// await Colada.track(
+///   RawEvent(eventName: 'NewBackendEvent', extras: {'foo': 'bar'}),
+/// );
+/// ```
 final class RawEvent extends ColadaEvent {
   /// Creates a raw event with the exact wire [eventName] the backend expects.
   const RawEvent({
