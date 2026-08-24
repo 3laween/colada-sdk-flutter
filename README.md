@@ -125,21 +125,8 @@ await Colada.track(
 );
 ```
 
-**4. Read attribution** to learn which campaign drove the install:
-
-```dart
-Colada.attributionStream.listen((a) {
-  if (a.matched) debugPrint('campaign: ${a.utmCampaign}');
-});
-
-final link = await Colada.consumeDeferredDeepLink();
-if (link != null && link.hasDestination) {
-  // navigate using link.extras (e.g. link.extras['storeId'])
-}
-```
-
 Deep links need no setup beyond declaring your URL scheme — the plugin forwards
-what the OS delivers, so first-install and re-engagement handshakes happen on
+what the OS delivers, so first-install and re-engagement attribution happens on
 their own.
 
 ## Contributors
