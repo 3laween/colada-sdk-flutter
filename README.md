@@ -26,10 +26,6 @@ bring you better numbers.
 > tracking, ads tracking, ads optimization, ad spending optimization, higher
 > ROAS, killing bad ads, scaling winner ads, social media marketing.
 
-This package is the Flutter SDK: one async, type-safe Dart API over the native
-Colada Android and iOS SDKs — initialize once, identify your users, track the
-events that matter, and read back the campaign that drove each install.
-
 ## How it works
 
 Colada answers one question for every install — **which ad campaign brought this
@@ -37,35 +33,20 @@ user?** — and then lets you report what they do next so those conversions can 
 forwarded to the right ad platform.
 
 The main idea is that **you do almost nothing**. You call `Colada.initialize`
-once with your **public tenant key** (`pk_live_…`), and from there the native SDK
-owns the entire backend conversation:
+once with your **public tenant key** (`pk_live_…`), then identify your users and
+track the events that matter — Colada handles the rest.
 
-- **Auth is automatic.** It exchanges your tenant key for a short-lived session
-  token and attaches it to every backend request itself. You never see, store, or
-  refresh a token — there is no API for it, by design.
-- **Attribution is automatic.** On first install — and on any ad-driven deep-link
-  open — the SDK runs an *attribution handshake* on its own and resolves the
-  campaign (via the deep link, install referrer, clipboard, or a probabilistic
-  match). An ordinary app open does nothing.
-- **You just identify and track.** Call `setUser` after login/sign-up, and
-  `track` when meaningful events happen. The backend links each event to that
-  user's attribution and forwards it to the ad platform that drove the install.
-
-You read the resolved campaign back on a stream, and consume any deferred
-deep-link destination to route a first-time user to the right screen. That is the
-whole surface: **initialize → identify → track → read attribution.**
+That is the whole surface: **initialize → identify → track.**
 
 ## Features
 
 - **One API, both platforms.** Android and iOS behave the same from Dart; where
   they genuinely differ, it is flagged in each method's API docs and made loud in
   debug via `ColadaConfig.strictMode`.
-- **Type-safe events.** Nine lifecycle events as sealed classes; required fields
-  are enforced by the compiler, not discovered at runtime.
 - **Typed failures.** Every error is a `ColadaException` — one `catch`, no raw
   platform exceptions.
 - **Automatic deep-link attribution.** The plugin observes the links the OS
-  delivers and reports them for you; no `MainActivity` or `AppDelegate` code.
+  delivers and reports them for you.
 - **Attribution as a stream.** Subscribe late and still receive the result — the
   stream replays the most recent value.
 
