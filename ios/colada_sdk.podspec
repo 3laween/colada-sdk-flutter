@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'colada_sdk'
-  s.version          = '0.1.1'
+  s.version          = '0.2.1'
   s.summary          = 'Flutter SDK for Colada mobile attribution and event tracking.'
   s.description      = <<-DESC
 A Flutter bridge over the native Colada iOS SDK for mobile attribution and event tracking.
@@ -26,7 +26,7 @@ A Flutter bridge over the native Colada iOS SDK for mobile attribution and event
   # versions across the two packaging formats is a bug nobody would think to
   # look for. Loosen to '~> 0.1' only once a second native version exists and
   # compatibility has actually been proven.
-  s.dependency 'Colada', '0.2.0'
+  s.dependency 'Colada', '0.2.1'
   s.platform = :ios, '13.0'
   s.swift_version = '5.9'
   # Flutter plugin convention; also required so the binary Colada pod links
