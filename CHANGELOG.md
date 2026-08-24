@@ -2,17 +2,11 @@
 
 ## 0.2.1
 
-Pins both natives at 0.2.1 and documents the public API. No Dart API changes.
-
-- **Fixed (native, iOS):** deep links carrying `click_id` — the parameter
-  Colada's own generated links stamp — are now attributed on iOS, matching
-  Android. Previously such a link produced no attribution signal on iOS and the
-  handshake silently never fired. Pulls native `Colada` 0.2.1 on both CocoaPods
-  and Swift Package Manager.
-- **Docs:** every public event (`AddToCart`, `Purchase`, `Login`,
-  `CompleteRegistration`, …) and every `Colada` facade method now carries a
-  short "how to use it" description and a usage example, so the API is
-  self-documenting at the call site.
+- **More reliable deep link attribution on iOS.** Re-engagement links now
+  attribute correctly on iOS, matching Android — so campaigns that bring existing
+  users back into your app are measured accurately on both platforms.
+- **Clearer documentation.** Every event and method now includes a short
+  description and a usage example.
 
 ## 0.2.0
 

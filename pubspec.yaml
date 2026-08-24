@@ -1,11 +1,20 @@
 name: colada_sdk
 description: >-
-  Flutter SDK for Colada mobile attribution and event tracking. A single-package
-  bridge over the native Colada Android and iOS SDKs.
+  Mobile attribution & marketing performance for Flutter apps: track ad
+  campaigns, social media ads, ROAS and conversions across every channel in one
+  place.
 version: 0.2.1
 repository: https://github.com/3laween/colada-sdk-flutter
-homepage: https://github.com/3laween/colada-sdk-flutter
+homepage: https://masar-ai.manus.space/
 issue_tracker: https://github.com/3laween/colada-sdk-flutter/issues
+
+# pub.dev discoverability tags (max 5).
+topics:
+  - attribution
+  - marketing
+  - analytics
+  - advertising
+  - ads
 
 # Floors are set at what the code actually needs (sealed classes, records),
 # not at the local toolchain version, so integrators on slightly older stable

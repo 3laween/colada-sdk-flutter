@@ -1,9 +1,34 @@
 # Colada SDK
 
-Flutter SDK for [Colada](https://coladaapp.io) — mobile attribution and event
-tracking. One async, type-safe Dart API over the native Colada Android and iOS
-SDKs: initialize once, identify your users, track the events that matter, and
-read back the campaign that drove each install.
+**Mobile attribution & marketing performance, in one place.** Colada tells you
+exactly which ad and which campaign brought every user into your app — and how
+much they're worth afterwards — so you can stop guessing and start optimizing.
+
+👉 **Learn more: [masar-ai.manus.space](https://masar-ai.manus.space/)**
+
+Instead of logging into Meta, TikTok, Google, Snapchat and every other dashboard
+to piece together what's working, Colada brings your **true marketing performance
+into a single, real-time view** — so you know your numbers *now*, not days later
+and not spread across ten tabs.
+
+**Who it's for:** any app, any country, any industry. Colada is **global and
+sector-agnostic** — if you have an app and you run marketing, this is the tool to
+bring you better numbers.
+
+**What Colada gives you:**
+
+- **Attribution** — know the exact source of every install and in-app event.
+- **Marketing performance tracking** — all your channels in one dashboard.
+- **Social media campaign & ads tracking** — Meta, TikTok, Google, Snapchat, and more.
+- **Ad spend optimization & higher ROAS** — kill the bad ads, scale the winners with confidence.
+
+> Keywords: attribution, marketing performance tracking, social media campaign
+> tracking, ads tracking, ads optimization, ad spending optimization, higher
+> ROAS, killing bad ads, scaling winner ads, social media marketing.
+
+This package is the Flutter SDK: one async, type-safe Dart API over the native
+Colada Android and iOS SDKs — initialize once, identify your users, track the
+events that matter, and read back the campaign that drove each install.
 
 ## How it works
 
