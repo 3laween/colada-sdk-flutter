@@ -81,14 +81,19 @@ whole surface: **initialize → identify → track → read attribution.**
 
 ```yaml
 dependencies:
-  colada_sdk: ^0.1.1
+  colada_sdk: ^0.2.1
 ```
 
 ## Quickstart
 
-**1. Initialize before `runApp`.** The SDK collects install signals that are
-only briefly available at launch, so initialize as the first thing in `main()`.
-Replace `YOU_PUBLIC_KEY` with your public tenant key (`pk_live_…`).
+The pattern below mirrors a real production integration: **initialize once, then
+route every call through a thin wrapper that never throws** — attribution and
+analytics should never block or crash a user flow.
+
+**1. Initialize before `runApp`, with a timeout.** The SDK collects install
+signals that are only briefly available at launch, so initialize as the first
+thing in `main()`. Bound it, so a slow native start can never hold up your app.
+Replace `pk_live_…` with your public tenant key.
 
 ```dart
 import 'package:colada_sdk/colada_sdk.dart';
@@ -97,37 +102,90 @@ import 'package:flutter/material.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (kDebugMode) {
+    // Attach BEFORE initialize() — the log stream does not replay past records,
+    // so a listener added later would miss anything emitted during startup.
+    Colada.logs.listen((record) => debugPrint('[Colada] $record'));
+  }
+
   await Colada.initialize(
     const ColadaConfig(
-      publicTenantKey: 'YOU_PUBLIC_KEY',
-      strictMode: kDebugMode, // loud about platform gaps in debug
+      publicTenantKey: 'pk_live_your_key_here',
+      debug: kDebugMode,
     ),
+  ).timeout(
+    const Duration(seconds: 3),
+    onTimeout: () => debugPrint('[Colada] initialize() timed out'),
   );
+
   runApp(const MyApp());
 }
 ```
 
-**2. Identify the user** after sign-up, after login, and on app start when
-restoring a saved session:
+**2. Wrap the SDK once, so a failure can never reach your UI.** Keep the guard in
+one place instead of a `try/catch` at every call site:
 
 ```dart
-await Colada.setUser(user.id);
+class Attribution {
+  Attribution._();
+
+  /// Call after sign-up, after login, and on app start when restoring a session.
+  static Future<void> identify(String? userId) async {
+    if (userId == null || userId.isEmpty) return;
+    try {
+      await Colada.setUser(userId);
+    } on ColadaException catch (e) {
+      debugPrint('[Colada] setUser failed: $e'); // never rethrow
+    }
+  }
+
+  /// Call on logout.
+  static Future<void> forget() async {
+    try {
+      await Colada.clearUser();
+    } on ColadaException catch (e) {
+      debugPrint('[Colada] clearUser failed: $e');
+    }
+  }
+
+  /// Call when a meaningful event happens.
+  static Future<void> track(ColadaEvent event) async {
+    try {
+      await Colada.track(event);
+    } on ColadaException catch (e) {
+      debugPrint('[Colada] track failed: $e');
+    }
+  }
+}
 ```
 
-> On iOS, call `setUser` **before** your first `track` (see the `Colada.track`
-> API docs for the platform note).
-
-**3. Track events** when they happen:
+**3. Identify the user** at each auth seam:
 
 ```dart
-await Colada.track(
+await Attribution.identify(user.id);   // sign-up, login, session restore
+await Attribution.forget();            // logout
+```
+
+> On iOS, identify the user **before** your first `track` (see the `Colada.track`
+> API docs for the platform note).
+
+**4. Track conversions** alongside your other analytics:
+
+```dart
+await Attribution.track(
   const Purchase(amount: 49.99, currency: 'SAR', orderId: 'ORD-123'),
 );
+await Attribution.track(const Login());
+await Attribution.track(Search(extras: {'query': term}));
 ```
 
 Deep links need no setup beyond declaring your URL scheme — the plugin forwards
 what the OS delivers, so first-install and re-engagement attribution happens on
 their own.
+
+> **Runnable example:** see [`example/`](example/) for a full app wiring
+> initialize, identify, and track together.
 
 ## Contributors
 
