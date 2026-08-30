@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+- **iOS: clipboard attribution now works on a fresh install.** On iOS the SDK now
+  prompts for paste permission on first launch and keeps asking until the user
+  allows, so the clipboard attribution token is read — matching Android and the
+  behaviour the app had before adopting the SDK. Previously a fresh iOS install
+  never prompted (a privacy-gated read that never fired), so the token was missed.
+  No Dart API change: this is inherited from the native iOS core (pinned to
+  `0.2.2`); your app gets it through the `Colada.initialize` you already call.
+
 ## 0.2.1
 
 - **More reliable deep link attribution on iOS.** Re-engagement links now

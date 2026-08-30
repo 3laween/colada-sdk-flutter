@@ -29,7 +29,7 @@ let package = Package(
         // 'Colada'` in ../colada_sdk.podspec — a CocoaPods app reads that file
         // and never this one, so the two pins drifting apart would ship
         // different native versions to different hosts.
-        .package(url: "https://github.com/3laween/colada-sdk-ios.git", exact: "0.2.1"),
+        .package(url: "https://github.com/3laween/colada-sdk-ios.git", exact: "0.2.2"),
     ],
     targets: [
         .target(
