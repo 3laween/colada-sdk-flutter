@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3
+
+- **iOS: the device id no longer rotates on reinstall/restore.** The native iOS core
+  (pinned to `Colada` 0.2.3) now resolves device identity as
+  `Keychain → identifierForVendor → UUID`, mirroring the Android core's `ANDROID_ID`
+  waterfall. Previously a Keychain miss minted a brand-new random id, so one physical
+  device could appear under several `deviceId`s on the attribution/events dashboard;
+  `identifierForVendor` now lets iOS self-heal to the same id. `reset()` still severs the
+  identity. No Dart API change — inherited from the native iOS core.
+
 ## 0.2.2
 
 - **iOS: clipboard attribution now works on a fresh install.** On iOS the SDK now
