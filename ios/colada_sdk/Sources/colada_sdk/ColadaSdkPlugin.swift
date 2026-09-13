@@ -29,12 +29,12 @@ import UIKit
 ///
 /// ### What the bridge owns on iOS
 ///
-/// `isInitialized`, `strictMode` and `existingDeviceId` have no native
-/// equivalent the bridge uses: it tracks its own initialized flag, keeps
-/// `strictMode` for the warn-versus-throw tiers on capabilities iOS cannot
-/// offer, and refuses `existingDeviceId`. `debug` IS now forwarded to the
-/// native SDK, so its log sink honours it — the bridge also keeps a copy to
-/// gate the records it emits itself.
+/// `isInitialized` and `strictMode` have no native equivalent the bridge uses:
+/// it tracks its own initialized flag and keeps `strictMode` for the
+/// warn-versus-throw tiers on capabilities iOS cannot offer. `existingDeviceId`
+/// IS now forwarded to the native SDK (which force-adopts it as the device
+/// identity), as is `debug` (so the native log sink honours it — the bridge
+/// also keeps a copy to gate the records it emits itself).
 public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   /// The bridge's own flag: true once `configure()` has returned without
@@ -107,22 +107,10 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
     strictMode = config.strictMode
     autoForward = config.automaticDeepLinkForwarding
 
-    // R1 — the native iOS SDK has no way to adopt an identifier minted by a
-    // previous implementation, so an app migrating from one gets a fresh
-    // identity here, detached from its attribution history on Android. Nothing
-    // the bridge can do about it under the native-freeze decision; what it can
-    // do is refuse to be quiet about it.
-    if config.existingDeviceId != nil,
-      let error = reportUnsupported(
-        feature: "existingDeviceId",
-        detail:
-          "The native iOS SDK cannot adopt an existing device identifier, so this device "
-          + "will be given a new one. Attribution history recorded against the old "
-          + "identifier will not follow it.")
-    {
-      completion(.failure(error))
-      return
-    }
+    // The native iOS SDK now accepts `existingDeviceId` (parity with Android), so the
+    // bridge forwards it into `configure` below instead of refusing it. A host that
+    // resolved its own device id before adopting the SDK can hand it over here and the
+    // SDK keys on the SAME id — one device, one backend record, not two.
 
     Task {
       do {
@@ -142,6 +130,7 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
           apiKey: config.publicTenantKey,
           strictMode: false,
           debug: self.debug,
+          existingDeviceId: config.existingDeviceId,
           logSink: self.makeNativeLogSink()
         )
         self.onMain {
