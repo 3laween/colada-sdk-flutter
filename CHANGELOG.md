@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.4
+
+- **iOS: `existingDeviceId` is now honored, fixing two device ids for one device.** When a
+  host app resolves its own device id before adopting the SDK, passing it via
+  `ColadaConfig(existingDeviceId: ...)` makes the native iOS core (pinned to `Colada` 0.2.4)
+  key attribution on that same id instead of minting its own — previously the iOS bridge
+  refused `existingDeviceId`, so the app and the SDK reported one physical device under two
+  `deviceId`s. Unlike Android's migration-only seed, iOS **force-adopts**: a supplied id that
+  differs from the stored one overwrites it, healing a device that already split (it never
+  overwrites on a transient Keychain read failure). Mirrors Android's
+  `ColadaConfig.existingDeviceId`. No new Dart API — the field already existed.
+
 ## 0.2.3
 
 - **iOS: the device id no longer rotates on reinstall/restore.** The native iOS core
