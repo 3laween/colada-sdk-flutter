@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.5
+
+- **iOS: the session token is re-minted when the device id changes**, completing the
+  `existingDeviceId` fix from 0.2.4 (native `Colada` 0.2.5). The backend embeds `deviceId`
+  inside the `sdk/init` token, so a cached token kept asserting the *old* id on every
+  authorized call even after the device id was healed — silently re-splitting the device
+  until the token expired (~24h). The token now records the id it was minted for and
+  refreshes on a mismatch (a third trigger alongside missing/expired); tokens from an older
+  build are refreshed once. No Dart API change.
+
 ## 0.2.4
 
 - **iOS: `existingDeviceId` is now honored, fixing two device ids for one device.** When a
