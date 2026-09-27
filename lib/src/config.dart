@@ -31,8 +31,11 @@ class ColadaConfig {
 
   /// Your app's public API key, issued by Colada.
   ///
-  /// Format: [tenantKeyPrefix] followed by exactly [tenantKeyHexLength]
-  /// hexadecimal characters.
+  /// Format: [tenantKeyPrefix] (or [ksaTenantKeyPrefix] for tenants hosted in
+  /// Saudi Arabia) followed by exactly [tenantKeyHexLength] hexadecimal
+  /// characters. The prefix also selects the backend region — a
+  /// [ksaTenantKeyPrefix] key talks to the KSA backend, with nothing else to
+  /// configure.
   ///
   /// **Hardcode this per app build — never read it from a deep link, and never
   /// commit it.** Supply it at build time, e.g.
@@ -107,6 +110,15 @@ class ColadaConfig {
   /// Required prefix of a valid [publicTenantKey].
   static const String tenantKeyPrefix = 'pk_live_';
 
+  /// Prefix of a valid [publicTenantKey] issued to a tenant hosted in Saudi
+  /// Arabia. The native SDKs route these keys to the KSA backend.
+  static const String ksaTenantKeyPrefix = 'pk_ksa_';
+
+  static const List<String> _tenantKeyPrefixes = [
+    tenantKeyPrefix,
+    ksaTenantKeyPrefix,
+  ];
+
   /// Prefix of Colada's server-side secret keys, which must never reach an app.
   static const String _secretKeyPrefix = 'sk_live_';
 
@@ -156,17 +168,18 @@ class ColadaConfig {
         "the public key ('$tenantKeyPrefix…') instead.",
       );
     }
-    if (!publicTenantKey.startsWith(tenantKeyPrefix)) {
+    final prefix = _prefixOf(publicTenantKey);
+    if (prefix == null) {
       throw const ColadaInvalidConfigException(
         field,
-        "must start with '$tenantKeyPrefix'.",
+        "must start with '$tenantKeyPrefix' or '$ksaTenantKeyPrefix'.",
       );
     }
-    final body = publicTenantKey.substring(tenantKeyPrefix.length);
+    final body = publicTenantKey.substring(prefix.length);
     if (body.length != tenantKeyHexLength) {
       throw ColadaInvalidConfigException(
         field,
-        "must be '$tenantKeyPrefix' followed by exactly $tenantKeyHexLength hex "
+        "must be '$prefix' followed by exactly $tenantKeyHexLength hex "
         'characters, but had ${body.length}.',
       );
     }
@@ -183,8 +196,16 @@ class ColadaConfig {
   /// Never log a key in full — logs get pasted into bug reports and chat.
   static String redactKey(String key) {
     if (key.length <= _keyVisibleChars) return '***';
-    const wanted = tenantKeyPrefix.length + _keyVisibleChars;
+    final wanted =
+        (_prefixOf(key) ?? tenantKeyPrefix).length + _keyVisibleChars;
     return '${key.substring(0, wanted < key.length ? wanted : key.length)}…';
+  }
+
+  static String? _prefixOf(String key) {
+    for (final prefix in _tenantKeyPrefixes) {
+      if (key.startsWith(prefix)) return prefix;
+    }
+    return null;
   }
 
   /// Returns a copy with the given fields replaced.
