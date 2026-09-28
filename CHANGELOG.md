@@ -1,15 +1,5 @@
 # Changelog
 
-## 0.2.6
-
-- **Saudi Arabia region.** Public keys starting `pk_ksa_` are now accepted, and the SDK
-  talks to `https://api-ksa.coladaapp.io` for them; `pk_live_` keys keep using
-  `https://backend.coladaapp.io`. The region comes from the key alone — no code change,
-  just use the key Colada issued you. Native SDKs: iOS `Colada` 0.2.6, Android
-  `colada-android` 0.2.1.
-- A cached session token is re-minted if the key's region changes rather than being sent
-  to a backend that never issued it.
-
 ## 0.2.5
 
 - **iOS: the session token is re-minted when the device id changes**, completing the
