@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+- **Backend moved.** The SDK now talks to `https://api-ksa.coladaapp.io` instead of `https://backend.coladaapp.io`. Pins native iOS
+  `Colada` 0.2.7 and Android `colada-android` 0.2.2. No Dart API change and no integration
+  change; tenant keys are `pk_live_` as before.
+- Supersedes 0.2.6, which pinned native versions that were never released and should not be
+  used. (0.2.6 also accepted `pk_ksa_` keys; 0.2.7 does not.)
+
 ## 0.2.5
 
 - **iOS: the session token is re-minted when the device id changes**, completing the
