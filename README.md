@@ -172,6 +172,11 @@ await Colada.track(
 );
 ```
 
+**Give every event its own id.** Use the id your other integration sent for *that same*
+event — its purchase id for the purchase, its registration id for the registration — and
+pass nothing for an event it doesn't send. Colada also uses the id to spot duplicates, so
+reusing one id for two different events makes the backend drop the second one.
+
 `eventId` is optional — omit it and nothing changes. It is trimmed and a blank
 value is ignored; an id longer than 256 characters is not sent (the native SDK
 logs a warning, or throws in `strictMode`).

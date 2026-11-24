@@ -154,6 +154,11 @@ abstract final class Colada {
   /// );
   /// ```
   ///
+  /// Give every event its own id: use the id your other integration sent for
+  /// that same event, and pass nothing for an event it doesn't send. Colada
+  /// also uses the id to spot duplicates, so reusing one id for two different
+  /// events makes the backend drop the second one.
+  ///
   /// [eventId] is optional; omit it and nothing changes. It is trimmed, and a
   /// blank value is treated as absent. An id longer than 256 characters is not
   /// sent: the native SDK tracks the event without it and logs a warning (see
