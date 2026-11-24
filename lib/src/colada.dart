@@ -140,9 +140,40 @@ abstract final class Colada {
   /// event is held on-device and delivered once a user is known (or the next
   /// [clearUser]), matching the native SDKs' buffer-and-hold. Call [setUser]
   /// first when you can, so the held event carries the right identity sooner.
-  static Future<void> track(ColadaEvent event) async {
+  ///
+  /// ### Deduplicating with another integration
+  ///
+  /// If the same event also reaches the ad platforms from another integration
+  /// (your own pixel or your store platform), pass that integration's
+  /// event id as [eventId] so the platforms count it once:
+  ///
+  /// ```dart
+  /// await Colada.track(
+  ///   Purchase(amount: 249, currency: 'SAR', orderId: order.id),
+  ///   eventId: storeEventId,
+  /// );
+  /// ```
+  ///
+  /// Give every event its own id: use the id your other integration sent for
+  /// that same event, and pass nothing for an event it doesn't send. Colada
+  /// also uses the id to spot duplicates, so reusing one id for two different
+  /// events makes the backend drop the second one.
+  ///
+  /// [eventId] is optional; omit it and nothing changes. It is trimmed, and a
+  /// blank value is treated as absent. An id longer than 256 characters is not
+  /// sent: the native SDK tracks the event without it and logs a warning (see
+  /// [logs]), or throws when [ColadaConfig.strictMode] is on. That length rule
+  /// is enforced by the native SDKs, not here, so behaviour matches a native
+  /// integration exactly. A supplied id is kept through the native retry
+  /// queues, so a retried event still carries it.
+  static Future<void> track(ColadaEvent event, {String? eventId}) async {
     event.validate();
-    return ColadaBridge.instance.track(event.eventName, event.metadata);
+    final trimmed = eventId?.trim();
+    return ColadaBridge.instance.track(
+      event.eventName,
+      event.metadata,
+      eventId: (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+    );
   }
 
   /// Requests immediate delivery of any queued events.

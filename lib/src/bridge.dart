@@ -96,8 +96,15 @@ class ColadaBridge {
   // ------------------------------------------------------------------- events
 
   /// See `Colada.track`.
-  Future<void> track(String eventName, Map<String, Object?> metadata) =>
-      _guard('track', () => _hostApi.track(eventName, metadata));
+  ///
+  /// [eventId] is passed through as given; `Colada.track` has already
+  /// normalised it (trimmed, blank to null).
+  Future<void> track(
+    String eventName,
+    Map<String, Object?> metadata, {
+    String? eventId,
+  }) =>
+      _guard('track', () => _hostApi.track(eventName, metadata, eventId));
 
   /// See `Colada.flush`.
   Future<void> flush() => _guard('flush', () => _hostApi.flush());

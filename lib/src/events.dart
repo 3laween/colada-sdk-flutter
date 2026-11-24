@@ -23,6 +23,17 @@ import 'exceptions.dart';
 /// );
 /// ```
 ///
+/// If the same event also reaches the ad platforms from another integration
+/// (your own pixel or your store platform), pass that integration's event
+/// id so the platforms count it once — see `Colada.track`'s `eventId`:
+///
+/// ```dart
+/// await Colada.track(
+///   Purchase(amount: 249, currency: 'SAR', orderId: order.id),
+///   eventId: storeEventId,
+/// );
+/// ```
+///
 /// There is deliberately **no** `Download` event: the backend fires it
 /// automatically from the attribution handshake, and the cleanest way to
 /// enforce "never send this" is to make it impossible to express.

@@ -178,8 +178,15 @@ abstract class ColadaHostApi {
   /// `AttributionEventName` enum, splits the metadata into the native SDK's
   /// fixed struct, routes a registration carrying user data to
   /// `reportRegistration`, and reports any key it could not transmit.
+  ///
+  /// `eventId` is the optional caller-supplied deduplication id (the id another
+  /// integration — the app's own pixel, or your store platform — already
+  /// sent the same event to the ad platforms with). Null means "not supplied".
+  /// Dart only trims it and maps blank to null; the length rule, the warning
+  /// and the strict-mode error all belong to the native SDKs, so both
+  /// platforms behave exactly as their native integrations do.
   @async
-  void track(String eventName, Map<String, Object?> metadata);
+  void track(String eventName, Map<String, Object?> metadata, String? eventId);
 
   /// Requests immediate delivery of queued events.
   @async

@@ -195,6 +195,7 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
   func track(
     eventName: String,
     metadata: [String: Any?],
+    eventId: String?,
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
     // 1. Name to enum. The native vocabulary is fixed at nine cases, and its raw
@@ -234,16 +235,34 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
       return
     }
 
+    // 3. The caller's event id, as Dart sent it (already trimmed, blank -> nil).
+    //    The native SDK is configured with strictMode: false (see initialize), so
+    //    on its own it would only warn about an over-long id and send the event
+    //    without it. Under the bridge's strictMode, reject here instead, matching
+    //    Android, whose native SDK throws. Same limit as both native SDKs: 256
+    //    UTF-16 code units. Outside strictMode the native SDK warns as usual.
+    if strictMode, let eventId, eventId.utf16.count > Self.maxEventIdLength {
+      completion(
+        .failure(
+          coladaError(
+            code: ColadaErrorCode.invalidEvent,
+            message:
+              "\(eventName) eventId must be at most \(Self.maxEventIdLength) characters "
+              + "(got \(eventId.utf16.count)). The event was not sent.")))
+      return
+    }
+
     Task {
       do {
         if sendAsRegistration {
           // 3. Registration routing. reportRegistration is the only call that
           //    can carry user data, and the only way name/email/phoneNumber
           //    leave the device.
-          _ = try await ColadaSDK.shared.reportRegistration(userInfo: userInfo)
+          _ = try await ColadaSDK.shared.reportRegistration(
+            userInfo: userInfo, eventId: eventId)
         } else {
           _ = try await ColadaSDK.shared.reportEvent(
-            name, metadata: Self.eventMetadata(from: metadata))
+            name, metadata: Self.eventMetadata(from: metadata), eventId: eventId)
         }
         self.onMain { completion(.success(())) }
       } catch {
@@ -528,6 +547,9 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
   /// Metadata keys `reportRegistration` can carry, via `ColadaUserInfo`.
   private static let registrationKeys: Set<String> = ["name", "email", "phoneNumber"]
+
+  /// The native SDKs' limit for a caller-supplied event id, in UTF-16 code units.
+  private static let maxEventIdLength = 256
 
   /// Builds the user data for a registration, or nil when the event carries
   /// none — in which case it is reported as an ordinary event instead.

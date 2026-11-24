@@ -530,7 +530,14 @@ protocol ColadaHostApi {
   /// `AttributionEventName` enum, splits the metadata into the native SDK's
   /// fixed struct, routes a registration carrying user data to
   /// `reportRegistration`, and reports any key it could not transmit.
-  func track(eventName: String, metadata: [String: Any?], completion: @escaping (Result<Void, Error>) -> Void)
+  ///
+  /// `eventId` is the optional caller-supplied deduplication id (the id another
+  /// integration — the app's own pixel, or your store platform — already
+  /// sent the same event to the ad platforms with). Null means "not supplied".
+  /// Dart only trims it and maps blank to null; the length rule, the warning
+  /// and the strict-mode error all belong to the native SDKs, so both
+  /// platforms behave exactly as their native integrations do.
+  func track(eventName: String, metadata: [String: Any?], eventId: String?, completion: @escaping (Result<Void, Error>) -> Void)
   /// Requests immediate delivery of queued events.
   func flush(completion: @escaping (Result<Void, Error>) -> Void)
   /// The attribution resolved so far, or null.
@@ -648,13 +655,21 @@ class ColadaHostApiSetup {
     /// `AttributionEventName` enum, splits the metadata into the native SDK's
     /// fixed struct, routes a registration carrying user data to
     /// `reportRegistration`, and reports any key it could not transmit.
+    ///
+    /// `eventId` is the optional caller-supplied deduplication id (the id another
+    /// integration — the app's own pixel, or your store platform — already
+    /// sent the same event to the ad platforms with). Null means "not supplied".
+    /// Dart only trims it and maps blank to null; the length rule, the warning
+    /// and the strict-mode error all belong to the native SDKs, so both
+    /// platforms behave exactly as their native integrations do.
     let trackChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.colada_sdk.ColadaHostApi.track\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       trackChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let eventNameArg = args[0] as! String
         let metadataArg = args[1] as! [String: Any?]
-        api.track(eventName: eventNameArg, metadata: metadataArg) { result in
+        let eventIdArg: String? = nilOrValue(args[2])
+        api.track(eventName: eventNameArg, metadata: metadataArg, eventId: eventIdArg) { result in
           switch result {
           case .success:
             reply(wrapResult(nil))

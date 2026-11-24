@@ -591,7 +591,15 @@ class ColadaHostApi {
   /// `AttributionEventName` enum, splits the metadata into the native SDK's
   /// fixed struct, routes a registration carrying user data to
   /// `reportRegistration`, and reports any key it could not transmit.
-  Future<void> track(String eventName, Map<String, Object?> metadata) async {
+  ///
+  /// `eventId` is the optional caller-supplied deduplication id (the id another
+  /// integration — the app's own pixel, or your store platform — already
+  /// sent the same event to the ad platforms with). Null means "not supplied".
+  /// Dart only trims it and maps blank to null; the length rule, the warning
+  /// and the strict-mode error all belong to the native SDKs, so both
+  /// platforms behave exactly as their native integrations do.
+  Future<void> track(
+      String eventName, Map<String, Object?> metadata, String? eventId) async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.colada_sdk.ColadaHostApi.track$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
@@ -600,7 +608,7 @@ class ColadaHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final Future<Object?> pigeonVar_sendFuture =
-        pigeonVar_channel.send(<Object?>[eventName, metadata]);
+        pigeonVar_channel.send(<Object?>[eventName, metadata, eventId]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

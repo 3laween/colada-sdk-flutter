@@ -176,15 +176,21 @@ class ColadaSdkPlugin :
     override fun track(
         eventName: String,
         metadata: Map<String, Any?>,
+        eventId: String?,
         callback: (Result<Unit>) -> Unit,
     ) {
         try {
             // The wire-name overload: the native SDK builds the event via
             // ColadaEvent.of(name, map) and runs its own required-field
-            // validation, so the bridge does not duplicate it. Dart validated
-            // first, so an IllegalArgumentException here means the two validators
-            // disagree — a bug worth surfacing rather than swallowing.
-            Colada.track(eventName, metadata)
+            // validation, so the bridge does not duplicate it. An
+            // IllegalArgumentException here is either an over-long eventId under
+            // strictMode (expected; its message names the eventId) or a metadata
+            // rule the Dart validator missed (a bug worth surfacing).
+            //
+            // eventId arrives already trimmed (blank -> null) from Dart. The
+            // native SDK owns the rest of the rule — the 256-character limit, its
+            // warning, and the strictMode throw — so the bridge does not repeat it.
+            Colada.track(eventName, metadata, eventId)
             callback(Result.success(Unit))
         } catch (e: IllegalArgumentException) {
             callback(
