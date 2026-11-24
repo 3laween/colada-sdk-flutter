@@ -162,13 +162,12 @@ await Attribution.track(Search(extras: {'query': term}));
 ```
 
 **Deduplicating with another integration.** If the same event also reaches the
-ad platforms from another integration (your own pixel or a platform such as
-Salla), pass that integration's event id so the platforms count it once:
+ad platforms from another integration (your own pixel or your store platform), pass that integration's event id so the platforms count it once:
 
 ```dart
 await Colada.track(
   Purchase(amount: 249, currency: 'SAR', orderId: order.id),
-  eventId: sallaEventId,
+  eventId: storeEventId,
 );
 ```
 

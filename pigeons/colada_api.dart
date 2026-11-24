@@ -180,7 +180,7 @@ abstract class ColadaHostApi {
   /// `reportRegistration`, and reports any key it could not transmit.
   ///
   /// `eventId` is the optional caller-supplied deduplication id (the id another
-  /// integration — the app's own pixel, or a platform such as Salla — already
+  /// integration — the app's own pixel, or your store platform — already
   /// sent the same event to the ad platforms with). Null means "not supplied".
   /// Dart only trims it and maps blank to null; the length rule, the warning
   /// and the strict-mode error all belong to the native SDKs, so both

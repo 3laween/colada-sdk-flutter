@@ -4,9 +4,9 @@
 
 - **Optional caller-supplied `eventId` on `Colada.track`.** New named parameter:
   `Colada.track(event, {String? eventId})`. If the same event also reaches the ad platforms
-  from another integration (your own pixel or a platform such as Salla), pass that
+  from another integration (your own pixel or your store platform), pass that
   integration's event id so the platforms count it once:
-  `await Colada.track(Purchase(amount: 249, currency: 'SAR', orderId: order.id), eventId: sallaEventId);`.
+  `await Colada.track(Purchase(amount: 249, currency: 'SAR', orderId: order.id), eventId: storeEventId);`.
   Dart trims the id and treats blank as absent; the native SDKs own the rest (an id over 256
   characters is not sent and logs a warning, or throws in `strictMode`) and only put it on the
   wire when supplied, keeping it through their retry queues. Existing calls are unchanged.
