@@ -195,6 +195,7 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
   func track(
     eventName: String,
     metadata: [String: Any?],
+    eventId: String?,
     completion: @escaping (Result<Void, Error>) -> Void
   ) {
     // 1. Name to enum. The native vocabulary is fixed at nine cases, and its raw
@@ -236,14 +237,19 @@ public class ColadaSdkPlugin: NSObject, FlutterPlugin, ColadaHostApi {
 
     Task {
       do {
+        // eventId is passed as Dart sent it (already trimmed, blank -> nil). The
+        // native SDK owns the rest of the rule — the 256-character limit, its
+        // warning, and the strictMode throw — so this bridge behaves exactly as
+        // a native iOS integration does.
         if sendAsRegistration {
           // 3. Registration routing. reportRegistration is the only call that
           //    can carry user data, and the only way name/email/phoneNumber
           //    leave the device.
-          _ = try await ColadaSDK.shared.reportRegistration(userInfo: userInfo)
+          _ = try await ColadaSDK.shared.reportRegistration(
+            userInfo: userInfo, eventId: eventId)
         } else {
           _ = try await ColadaSDK.shared.reportEvent(
-            name, metadata: Self.eventMetadata(from: metadata))
+            name, metadata: Self.eventMetadata(from: metadata), eventId: eventId)
         }
         self.onMain { completion(.success(())) }
       } catch {

@@ -131,9 +131,9 @@ class Attribution {
   }
 
   /// Call when a meaningful event happens.
-  static Future<void> track(ColadaEvent event) async {
+  static Future<void> track(ColadaEvent event, {String? eventId}) async {
     try {
-      await Colada.track(event);
+      await Colada.track(event, eventId: eventId);
     } on ColadaException catch (e) {
       debugPrint('[Colada] track failed: $e');
     }
@@ -160,6 +160,21 @@ await Attribution.track(
 await Attribution.track(const Login());
 await Attribution.track(Search(extras: {'query': term}));
 ```
+
+**Deduplicating with another integration.** If the same event also reaches the
+ad platforms from another integration (your own pixel or a platform such as
+Salla), pass that integration's event id so the platforms count it once:
+
+```dart
+await Colada.track(
+  Purchase(amount: 249, currency: 'SAR', orderId: order.id),
+  eventId: sallaEventId,
+);
+```
+
+`eventId` is optional — omit it and nothing changes. It is trimmed and a blank
+value is ignored; an id longer than 256 characters is not sent (the native SDK
+logs a warning, or throws in `strictMode`).
 
 Deep links need no setup beyond declaring your URL scheme — the plugin forwards
 what the OS delivers, so first-install and re-engagement attribution happens on

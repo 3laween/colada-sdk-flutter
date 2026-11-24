@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Optional caller-supplied `eventId` on `Colada.track`.** New named parameter:
+  `Colada.track(event, {String? eventId})`. If the same event also reaches the ad platforms
+  from another integration (your own pixel or a platform such as Salla), pass that
+  integration's event id so the platforms count it once:
+  `await Colada.track(Purchase(amount: 249, currency: 'SAR', orderId: order.id), eventId: sallaEventId);`.
+  Dart trims the id and treats blank as absent; the native SDKs own the rest (an id over 256
+  characters is not sent and logs a warning, or throws in `strictMode`) and only put it on the
+  wire when supplied, keeping it through their retry queues. Existing calls are unchanged.
+  On iOS it reaches both `reportEvent` and, for `CompleteRegistration` carrying user data,
+  `reportRegistration`. Pigeon `ColadaHostApi.track` gains a nullable `eventId` argument.
+- **TODO before release:** bump the native pins (`ios/colada_sdk.podspec` and
+  `ios/colada_sdk/Package.swift` for iOS `Colada`, `android/build.gradle` for
+  `colada-android`) to the iOS / Android releases that ship `eventId`. The currently pinned
+  iOS 0.2.7 / Android 0.2.2 do not have it, so the plugin's native code will not compile
+  against them.
+
 ## 0.2.7
 
 - **Backend moved.** The SDK now talks to `https://api-ksa.coladaapp.io` instead of `https://backend.coladaapp.io`. Pins native iOS

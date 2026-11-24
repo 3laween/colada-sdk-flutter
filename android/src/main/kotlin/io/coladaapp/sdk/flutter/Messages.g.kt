@@ -541,8 +541,15 @@ interface ColadaHostApi {
    * `AttributionEventName` enum, splits the metadata into the native SDK's
    * fixed struct, routes a registration carrying user data to
    * `reportRegistration`, and reports any key it could not transmit.
+   *
+   * `eventId` is the optional caller-supplied deduplication id (the id another
+   * integration — the app's own pixel, or a platform such as Salla — already
+   * sent the same event to the ad platforms with). Null means "not supplied".
+   * Dart only trims it and maps blank to null; the length rule, the warning
+   * and the strict-mode error all belong to the native SDKs, so both
+   * platforms behave exactly as their native integrations do.
    */
-  fun track(eventName: String, metadata: Map<String, Any?>, callback: (Result<Unit>) -> Unit)
+  fun track(eventName: String, metadata: Map<String, Any?>, eventId: String?, callback: (Result<Unit>) -> Unit)
   /** Requests immediate delivery of queued events. */
   fun flush(callback: (Result<Unit>) -> Unit)
   /** The attribution resolved so far, or null. */
@@ -664,7 +671,8 @@ interface ColadaHostApi {
             val args = message as List<Any?>
             val eventNameArg = args[0] as String
             val metadataArg = args[1] as Map<String, Any?>
-            api.track(eventNameArg, metadataArg) { result: Result<Unit> ->
+            val eventIdArg = args[2] as String?
+            api.track(eventNameArg, metadataArg, eventIdArg) { result: Result<Unit> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(MessagesPigeonUtils.wrapError(error))
